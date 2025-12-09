@@ -5,6 +5,10 @@ import '../../pages/index.dart';
 import '../index.dart';
 
 class RoutePages {
+  // 历史记录
+  static List<String> history = [];
+   // 观察者
+  static RouteObservers observer = RouteObservers();
   // 列表
    static List<GetPage> list = [
     GetPage(

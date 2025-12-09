@@ -44,6 +44,7 @@ dependencies:
   cached_network_image: ^3.4.1
   # svg 图片  
   flutter_svg: ^2.2.3
+  adaptive_theme: ^3.7.2
 
 dev_dependencies:
   flutter_test:

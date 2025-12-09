@@ -73,6 +73,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.0.8"
+  ducafe_ui_core:
+    dependency: "direct main"
+    description:
+      name: ducafe_ui_core
+      sha256: "92ff9b05654e1b5ae2adbeac7227c669655da73f134bede75ad9aa1c505af904"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.6"
   fake_async:
     dependency: transitive
     description:

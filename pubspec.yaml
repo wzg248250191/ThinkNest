@@ -45,6 +45,22 @@ dev_dependencies:
 
   
   flutter_lints: ^5.0.0
+  #桌面图标
+  icons_launcher: ^3.0.3
+
+# app 图标
+icons_launcher:
+  image_path: "assets/icons/icon.png"
+  platforms:
+    android:
+      enable: true
+      notification_image: "assets/icons/icon.png"
+      # adaptive_background_color: '#ffffff'
+      adaptive_background_image: "assets/icons/ic_background.png"
+      adaptive_foreground_image: "assets/icons/icon.png"
+    ios:
+      enable: true
+
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -56,6 +72,7 @@ flutter:
     - assets/images/
     - assets/images/courses/
     - assets/svgs/
+    - assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

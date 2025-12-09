@@ -1,0 +1,3 @@
+static const settingsArrowSvg = 'assets/svgs/settings/settings_arrow.svg';
+static const settingsCacheSvg = 'assets/svgs/settings/settings_cache.svg';
+static const settingsInfoSvg = 'assets/svgs/settings/settings_info.svg';

@@ -1,0 +1,17 @@
+
+      GetPage(
+        name: RouteNames.course,
+        page: () => const CoursePage(),
+      ),
+      GetPage(
+        name: RouteNames.integration,
+        page: () => const IntegrationPage(),
+      ),
+      GetPage(
+        name: RouteNames.settings,
+        page: () => const SettingsPage(),
+      ),
+      GetPage(
+        name: RouteNames.systemMain,
+        page: () => const MainPage(),
+      ),

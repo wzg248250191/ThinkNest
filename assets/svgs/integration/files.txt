@@ -1,0 +1,8 @@
+static const iconCurtainSvg = 'assets/svgs/integration/icon_curtain.svg';
+static const iconDeskSvg = 'assets/svgs/integration/icon_desk.svg';
+static const iconLightSvg = 'assets/svgs/integration/icon_light.svg';
+static const iconLightningSvg = 'assets/svgs/integration/icon_lightning.svg';
+static const iconWallSvg = 'assets/svgs/integration/icon_wall.svg';
+static const navIntegratedSvg = 'assets/svgs/integration/nav_integrated.svg';
+static const navSettingsSvg = 'assets/svgs/integration/nav_settings.svg';
+static const navStartSvg = 'assets/svgs/integration/nav_start.svg';

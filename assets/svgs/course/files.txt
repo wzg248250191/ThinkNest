@@ -1,0 +1,5 @@
+static const backArrowSvg = 'assets/svgs/course/back_arrow.svg';
+static const courseCategoryTimelineSvg = 'assets/svgs/course/course_category_timeline.svg';
+static const courseFullscreenSvg = 'assets/svgs/course/course_fullscreen.svg';
+static const courseHeaderLineSvg = 'assets/svgs/course/course_header_line.svg';
+static const coursePlayDesktopSvg = 'assets/svgs/course/course_play_desktop.svg';

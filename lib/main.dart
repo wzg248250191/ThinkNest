@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
-      designSize: const Size(414, 896), // 设计稿中设备的尺寸(单位随意,建议dp,但在使用过程中必须保持一致)
+      designSize: const Size(2000, 1200), // 设计稿中设备的尺寸(单位随意,建议dp,但在使用过程中必须保持一致)
       splitScreenMode: false, // 支持分屏尺寸
       minTextAdapt: false, // 是否根据宽度/高度中的最小值适配文字
 
@@ -40,7 +40,7 @@ class MyApp extends StatelessWidget {
 
           // 路由
           // initialRoute: RouteNames.systemSplash,
-          initialRoute: RouteNames.systemMain,
+          initialRoute: RouteNames.systemSplash,
           getPages: RoutePages.list,
           navigatorObservers: [RoutePages.observer],
 

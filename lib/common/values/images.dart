@@ -85,6 +85,7 @@ static const sldgcPng = 'assets/images/courses/闪亮的国粹.png';
 static const slddyjPng = 'assets/images/courses/闪亮的大眼睛.png';
 static const fdamPng = 'assets/images/courses/风的奥秘.png';
 
-static const iconPng = 'assets/images/icon.png';
-static const logoPng = 'assets/images/logo.png';
+static const iconPng = 'assets/icons/icon.png';
+static const logoPng = 'assets/icons/logo.png';
+static const splashPng = 'assets/images/splash.png';
 }

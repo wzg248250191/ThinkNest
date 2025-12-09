@@ -9,6 +9,9 @@ class Global {
     //这个表示先就行原生端（ios android）插件注册，然后再处理后续操作，这样能保证代码运行正确。
     WidgetsFlutterBinding.ensureInitialized();
 
+  // 工具类
+    await Storage().init();
+    
     // 初始化队列
     await Future.wait([
       // 配置服务

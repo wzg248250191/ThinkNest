@@ -7,7 +7,6 @@ class AppTheme {
   /////////////////////////////////////////////////
   /// 自定义颜色
   /////////////////////////////////////////////////
-
   static const primary = Color(0xFF5F84FF);
   static const secondary = Color(0xFFFF6969);
   static const success = Color(0xFF23A757);
@@ -31,6 +30,23 @@ class AppTheme {
     return _getTheme(scheme);
   }
 
+  /// 自定义主题
+  static ThemeData get custom {
+    ColorScheme scheme = MaterialTheme.lightScheme().copyWith(
+      primary: CustomAppColors.primary,
+      onPrimary: Colors.white,
+      // background: CustomAppColors.background, // 已移除，Flutter 新版本废弃了 background
+      surface: CustomAppColors.card,
+      onSurface: CustomAppColors.text,
+      onSurfaceVariant: CustomAppColors.subText,
+      outline: CustomAppColors.border,
+    );
+    return _getTheme(scheme).copyWith(
+      scaffoldBackgroundColor: CustomAppColors.background,
+    );
+  }
+
+
   /// 获取主题
   static ThemeData _getTheme(ColorScheme scheme) {
     return ThemeData(
@@ -39,4 +55,25 @@ class AppTheme {
        fontFamily: "Alibaba-PuHuiTi", // 字体
     );
   }
+}
+class CustomAppColors {
+  static const Color primary = Color(0xFF3A9F7F); // 设计主绿
+  static const Color background = Color(0xFFF0F2F5);
+  static const Color card = Colors.white;
+  static const Color border = Color(0xFFDFE4EA);
+  static const Color text = Color(0xFF1B1C1F);
+  static const Color subText = Color(0xFF55606D);
+}
+
+class CustomAppRadius {
+  static const Radius r12 = Radius.circular(12);
+  static const Radius r20 = Radius.circular(20);
+}
+
+class CustomAppSpacing {
+  static const double s8 = 8;
+  static const double s12 = 12;
+  static const double s16 = 16;
+  static const double s20 = 20;
+  static const double s24 = 24;
 }

@@ -20,10 +20,8 @@ class CoursePage extends GetView<CourseController> {
       id: "course",
       builder: (_) {
         return Scaffold(
-          appBar: AppBar(title: const Text("course")),
-          body: SafeArea(
-            child: _buildView(),
-          ),
+          //appBar: AppBar(title: const Text("course")),
+          body: _buildView(),
         );
       },
     );

@@ -1,6 +1,7 @@
 import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:think_nest/global.dart';
 
@@ -11,8 +12,33 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // 设置全屏沉浸式布局，让app内容延伸到状态栏和导航栏区域
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.edgeToEdge,
+    );
+    
+    // 设置状态栏样式为透明，悬浮在app上
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent, // 状态栏背景透明
+        statusBarIconBrightness: Brightness.dark, // 状态栏图标为深色（亮色背景时使用）
+        statusBarBrightness: Brightness.light, // iOS状态栏样式
+        systemNavigationBarColor: Colors.black, // 导航栏颜色
+        systemNavigationBarIconBrightness: Brightness.light, // 导航栏图标亮度
+      ),
+    );
+  }
 
   // This widget is the root of your application.
   @override
@@ -25,7 +51,7 @@ class MyApp extends StatelessWidget {
       // 构建
       builder: (context, child) => AdaptiveTheme(
         // 样式
-        light: AppTheme.light, // 亮色主题
+        light: AppTheme.custom, // 默认使用自定义主题作为亮色模式
         dark: AppTheme.dark, // 暗色主题
         initial: ConfigService.to.themeMode, // 初始主题
         debugShowFloatingThemeButton: false, // 显示主题按钮
@@ -40,7 +66,7 @@ class MyApp extends StatelessWidget {
 
           // 路由
           // initialRoute: RouteNames.systemSplash,
-          initialRoute: RouteNames.systemSplash,
+          initialRoute: RouteNames.systemMain,
           getPages: RoutePages.list,
           navigatorObservers: [RoutePages.observer],
 

@@ -1,2 +1,1 @@
-static const iconPng = 'assets/images/icon.png';
-static const logoPng = 'assets/images/logo.png';
+static const logoPng = 'assets/icons/logo.png';

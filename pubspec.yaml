@@ -54,6 +54,8 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   #桌面图标
   icons_launcher: ^3.0.3
+  # 启动屏
+  flutter_native_splash: ^2.4.7
 
 # app 图标
 icons_launcher:
@@ -68,6 +70,18 @@ icons_launcher:
     ios:
       enable: true
 
+# 启动图适配 android 11 及以下, 12 以上，IOS
+flutter_native_splash:
+  web: false
+  color_android: "#ffffff"
+  #background_image_android: "assets/icons/logo.png"
+  background_image_ios: "assets/icons/logo.png"
+  # image_ios: "assets/launcher/android.png"
+  android_12:
+    image: "assets/icons/logo_small.png"
+    # icon_background_color: "#324ea1"
+
+
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -79,6 +93,9 @@ flutter:
     - assets/images/
     - assets/images/courses/
     - assets/svgs/
+    - assets/svgs/course/
+    - assets/svgs/settings/
+    - assets/svgs/integration/
     - assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see

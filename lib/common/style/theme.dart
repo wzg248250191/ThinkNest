@@ -35,13 +35,13 @@ class AppTheme {
     ColorScheme scheme = MaterialTheme.lightScheme().copyWith(
       primary: CustomAppColors.primary,
       onPrimary: Colors.white,
-      // background: CustomAppColors.background, // 已移除，Flutter 新版本废弃了 background
       surface: CustomAppColors.card,
       onSurface: CustomAppColors.text,
       onSurfaceVariant: CustomAppColors.subText,
       outline: CustomAppColors.border,
     );
     return _getTheme(scheme).copyWith(
+      //设置背景色
       scaffoldBackgroundColor: CustomAppColors.background,
     );
   }

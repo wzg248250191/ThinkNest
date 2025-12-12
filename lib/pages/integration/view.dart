@@ -28,7 +28,7 @@ class IntegrationPage extends GetView<IntegrationController> {
             appBar: PreferredSize(
               preferredSize: Size.fromHeight(160.h),
               child: AppBar(
-                backgroundColor: CustomAppColors.background,
+                backgroundColor: CustomAppColors.card,
                 elevation: 1,
                 title: Text(
                   "一体化设置",

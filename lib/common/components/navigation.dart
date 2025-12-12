@@ -83,19 +83,6 @@ class BuildNavigation extends StatelessWidget {
             .expanded(),
       );
     }
-    
-    // 如果是底部导航
-    /*return BottomAppBar(
-      color: context.colors.scheme.surface,
-      elevation: 0,
-      child: ws
-          .toRow(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-          )
-          .height(kBottomNavigationBarHeight),
-    );*/
-
     // 改为左侧垂直导航 (NavigationRail 风格)
     return Container(
       color: context.colors.scheme.surface,

@@ -57,7 +57,7 @@ class MainPage extends GetView<MainController> {
                               fontWeight: FontWeight.w400,
                               icon: AssetsSvgs.navStartSvg,
                               iconWidth: 52.2,
-                              iconHeight: 50.27,
+                              iconHeight: 50.27,                           
                             ),
                             NavigationItemModel(
                               label: "一体化",
@@ -82,6 +82,35 @@ class MainPage extends GetView<MainController> {
                     ),
                   ),
                 ],
+              ),
+            )
+                // 左侧导航容器阴影：提升立体感，避免与内容区贴合
+                .elevation(
+                  8,
+                  borderRadius: BorderRadius.zero,
+                  shadowColor: Colors.black.withValues(alpha: 0.12),
+                )
+                // 右侧分隔边框：与右侧内容区域做视觉分隔
+                .decorated(
+                  border: Border(
+                    right: BorderSide(
+                      color: context.colors.scheme.outline,
+                      width: AppBorder.card,
+                    ),
+                  ),
+                ),
+            // 右侧渐变阴影条：增强阴影可见性（深->浅）
+            Container(
+              width: 3.w,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.08),
+                    Colors.transparent,
+                  ],
+                ),
               ),
             ),
             Expanded(
@@ -110,7 +139,6 @@ class MainPage extends GetView<MainController> {
       id: "main",
       builder: (_) {
         return Scaffold(
-         // appBar: AppBar(title: const Text("main")),
           body: _buildView(context),
         );
       },

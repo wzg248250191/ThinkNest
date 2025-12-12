@@ -248,7 +248,7 @@ class TextWidget extends StatelessWidget {
         fontSize: _fontSize(),
         fontWeight: weight,
         fontStyle: fontStyle,
-      ),
+      ).merge(textStyle),
       maxLines: maxLines,
       softWrap: softWrap,
       overflow: overflow,

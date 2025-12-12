@@ -65,7 +65,6 @@ class _MyAppState extends State<MyApp> {
           darkTheme: darkTheme,
 
           // 路由
-          // initialRoute: RouteNames.systemSplash,
           initialRoute: RouteNames.systemMain,
           getPages: RoutePages.list,
           navigatorObservers: [RoutePages.observer],
@@ -79,11 +78,15 @@ class _MyAppState extends State<MyApp> {
 
           // builder
           builder: (context, widget) {
-            // 不随系统字体缩放比例
+            final data = MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.0));
             return MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: const TextScaler.linear(1.0)),
-              child: widget!,
+              data: data,
+              child: MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                child: widget!,
+              ),
             );
           },
 

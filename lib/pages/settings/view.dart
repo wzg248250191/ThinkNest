@@ -93,13 +93,9 @@ class SettingsPage extends GetView<SettingsController> {
       init: SettingsController(),
       id: "settings",
       builder: (_) {
-        return MediaQuery.removePadding(
-          context: context,
-          removeTop: true,
-          child: Scaffold(
-            appBar:  _buildAppBar(context),
-            body: _buildView(),
-          ),
+        return Scaffold(
+          appBar:  _buildAppBar(context),
+          body: _buildView(),
         );
       },
     );
@@ -134,7 +130,5 @@ class SettingsPage extends GetView<SettingsController> {
         automaticallyImplyLeading: false,
       ),
     );
-  }
-
-  
+  } 
 }

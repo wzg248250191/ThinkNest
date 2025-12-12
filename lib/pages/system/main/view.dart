@@ -50,6 +50,7 @@ class MainPage extends GetView<MainController> {
                       builder: (controller) {
                         return BuildNavigation(
                           currentIndex: controller.currentIndex,
+                          selectedScale: 1.3,
                           items: [
                             NavigationItemModel(
                               label: "开始上课",
@@ -57,7 +58,8 @@ class MainPage extends GetView<MainController> {
                               fontWeight: FontWeight.w400,
                               icon: AssetsSvgs.navStartSvg,
                               iconWidth: 52.2,
-                              iconHeight: 50.27,                           
+                              iconHeight: 50.27,  
+                              itemHeight: 250.w                         
                             ),
                             NavigationItemModel(
                               label: "一体化",
@@ -66,6 +68,7 @@ class MainPage extends GetView<MainController> {
                               icon: AssetsSvgs.navIntegratedSvg,
                               iconWidth: 52.44,
                               iconHeight: 52.41,
+                              itemHeight: 250.w
                             ),
                             NavigationItemModel(
                               label: "设置",
@@ -74,6 +77,7 @@ class MainPage extends GetView<MainController> {
                               icon: AssetsSvgs.navSettingsSvg,
                               iconWidth: 50.28,
                               iconHeight: 47.52,
+                              itemHeight:250.w
                             )
                           ],
                           onTap: controller.onJumpToPage,

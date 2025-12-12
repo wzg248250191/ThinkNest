@@ -58,7 +58,7 @@ class AppTheme {
 }
 class CustomAppColors {
   static const Color primary = Color(0xFF3A9F7F); // 设计主绿
-  static const Color background = Color(0xFFF0F2F5);
+  static const Color background = Color.fromARGB(255, 247, 247, 247);
   static const Color card = Colors.white;
   static const Color border = Color(0xFFDFE4EA);
   static const Color text = Color(0xFF1B1C1F);

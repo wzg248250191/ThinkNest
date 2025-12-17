@@ -2,14 +2,32 @@ import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-
 import '../../../common/index.dart';
 import '../../index.dart';
 
-class MainPage extends GetView<MainController> {
+class MainPage extends StatefulWidget {
   const MainPage({super.key});
 
-   // 主视图
+  @override
+  State<MainPage> createState() => _MainPageState();
+}
+
+class _MainPageState extends State<MainPage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return const _MainViewGetX();
+  }
+}
+
+class _MainViewGetX extends GetView<MainController> {
+  const _MainViewGetX();
+
+  // 主视图
   Widget _buildView(BuildContext context) {
     return PopScope(
       // 允许返回
@@ -32,48 +50,38 @@ class MainPage extends GetView<MainController> {
         extendBody: true,
         resizeToAvoidBottomInset: false,
         // 内容页
-        body: Row(
-          children: [
-            Container(
-              width: 240.w,
-              color: Colors.white,
-              child: Column(
-                children: [
-                  ImageWidget.img(
-                    AssetsImages.logoPng,
-                    width: 107.84.w,
-                    height: 120.99.h,
-                  ).paddingTop(60.h),
-                  Expanded(
-                    child: GetBuilder<MainController>(
+        body: <Widget>[
+          <Widget>[
+             ImageWidget.img(
+              AssetsImages.logoPng,
+              width: 107.84.w,
+              height: 120.99.h,
+            ).paddingTop(60.h),
+             GetBuilder<MainController>(
                       id: 'navigation',
                       builder: (controller) {
                         return BuildNavigation(
                           currentIndex: controller.currentIndex,
                           selectedScale: 1.3,
+                          defaultFontSize: 28,
+                          defaultFontWeight: FontWeight.w400,
                           items: [
                             NavigationItemModel(
-                              label: "开始上课",
-                              fontSize: 28,
-                              fontWeight: FontWeight.w400,
+                              label: "开始上课",                            
                               icon: AssetsSvgs.navStartSvg,
                               iconWidth: 52.2,
                               iconHeight: 50.27,  
                               itemHeight: 250.w                         
                             ),
                             NavigationItemModel(
-                              label: "一体化",
-                              fontSize: 28,
-                              fontWeight: FontWeight.w400,
+                              label: "一体化",                            
                               icon: AssetsSvgs.navIntegratedSvg,
                               iconWidth: 52.44,
                               iconHeight: 52.41,
                               itemHeight: 250.w
                             ),
                             NavigationItemModel(
-                              label: "设置",
-                              fontSize: 28,
-                              fontWeight: FontWeight.w400,
+                              label: "设置",                            
                               icon: AssetsSvgs.navSettingsSvg,
                               iconWidth: 50.28,
                               iconHeight: 47.52,
@@ -83,27 +91,20 @@ class MainPage extends GetView<MainController> {
                           onTap: controller.onJumpToPage,
                         );
                       },
-                    ),
-                  ),
-                ],
-              ),
-            )
-                // 左侧导航容器阴影：提升立体感，避免与内容区贴合
-                .elevation(
-                  8,
-                  borderRadius: BorderRadius.zero,
-                  shadowColor: Colors.black.withValues(alpha: 0.12),
-                )
-                // 右侧分隔边框：与右侧内容区域做视觉分隔
-                .decorated(
-                  border: Border(
-                    right: BorderSide(
-                      color: context.colors.scheme.outline,
-                      width: AppBorder.card,
-                    ),
+                    ).expanded()
+          ].toColumn()
+              .width(240.w)
+              // 右侧分隔边框：与右侧内容区域做视觉分隔
+              .decorated(
+                border: Border(
+                  right: BorderSide(
+                    color: context.colors.scheme.outline,
+                    width: AppBorder.card,
                   ),
                 ),
-            // 右侧渐变阴影条：增强阴影可见性（深->浅）
+              )
+              .backgroundColor(CustomAppColors.card),
+         // 右侧渐变阴影条：增强阴影可见性（深->浅）
             Container(
               width: 3.w,
               decoration: BoxDecoration(
@@ -117,34 +118,33 @@ class MainPage extends GetView<MainController> {
                 ),
               ),
             ),
-            Expanded(
-              child: PageView(
-                physics: const NeverScrollableScrollPhysics(),
-                controller: controller.pageController,
-                onPageChanged: controller.onIndexChanged,
-                children: [
-                  CoursePage(),
-                  IntegrationPage(),
-                  SettingsPage(),
-                ],
-              ),
+          Expanded(//导航栏右侧内容
+            child: GetBuilder<MainController>(
+              id: 'content',
+              builder: (_) {
+                return IndexedStack(
+                  index: controller.currentIndex,
+                  children: const [
+                    CoursePage(),
+                    IntegrationPage(),
+                    SettingsPage(),
+                  ],
+                );
+              },
             ),
-          ],
-        ),
+          )
+        ].toRow()
       ),
     );
   }
 
 
   @override
-  Widget build(BuildContext context) {
-    return GetBuilder<MainController>(
-      init: MainController(),
+   Widget build(BuildContext context) {
+   return GetBuilder<MainController>(
       id: "main",
       builder: (_) {
-        return Scaffold(
-          body: _buildView(context),
-        );
+        return _buildView(context);
       },
     );
   }

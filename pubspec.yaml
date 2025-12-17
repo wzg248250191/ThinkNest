@@ -25,6 +25,7 @@ dependencies:
   adaptive_theme: ^3.7.2
   #缓存
   path_provider: ^2.1.4
+  scrollable_positioned_list: ^0.3.8
 
 dev_dependencies:
   flutter_test:

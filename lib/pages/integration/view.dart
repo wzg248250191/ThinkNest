@@ -78,7 +78,6 @@ class IntegrationPage extends GetView<IntegrationController> {
   @override
   Widget build(BuildContext context) {
     return GetBuilder<IntegrationController>(
-      init: IntegrationController(),
       id: "integration",
       builder: (_) {
         return  Scaffold(

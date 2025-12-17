@@ -11,16 +11,12 @@ class RouteObservers<R extends Route<dynamic>> extends RouteObserver<R> {
     super.didPush(route, previousRoute);
     var name = route.settings.name ?? '';
     if (name.isNotEmpty) RoutePages.history.add(name);
-    debugPrint('didPush');
-    debugPrint(RoutePages.history.toString());
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
     RoutePages.history.remove(route.settings.name);
-    debugPrint('didPop');
-    debugPrint(RoutePages.history.toString());
   }
 
   @override
@@ -39,16 +35,12 @@ class RouteObservers<R extends Route<dynamic>> extends RouteObserver<R> {
         }
       }
     }
-    debugPrint('didReplace');
-    debugPrint(RoutePages.history.toString());
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didRemove(route, previousRoute);
     RoutePages.history.remove(route.settings.name);
-    debugPrint('didRemove');
-    debugPrint(RoutePages.history.toString());
   }
 
   @override

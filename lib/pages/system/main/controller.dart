@@ -19,15 +19,16 @@ class MainController extends GetxController {
     update(["main"]);
   }
 
-    // 导航栏切换
+  // 导航栏切换
   void onIndexChanged(int index) {
     currentIndex = index;
-    update(['navigation']);
+    update(['content', 'navigation']);
   }
 
   // 切换页面
   void onJumpToPage(int page) {
-    pageController.jumpToPage(page);
+    currentIndex = page;
+    update(['content', 'navigation']);
   }
 
   // 返回键退出

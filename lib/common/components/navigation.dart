@@ -13,8 +13,6 @@ class NavigationItemModel {
   final int count;
   final double? iconWidth; // 图标宽度
   final double? iconHeight; // 图标高度
-  final double? fontSize; // 文字大小
-  final FontWeight? fontWeight; // 文字粗细
   final double? itemHeight; // 按钮高度（单个项可配置）
 
   NavigationItemModel({
@@ -23,8 +21,6 @@ class NavigationItemModel {
     this.count = 0,
     this.iconWidth,
     this.iconHeight,
-    this.fontSize,
-    this.fontWeight,
     this.itemHeight,
   });
 }
@@ -83,8 +79,8 @@ class BuildNavigation extends StatelessWidget {
         ).paddingBottom(20.h),
         TextWidget.label(
           item.label.tr,
-          size: item.fontSize?.sp ?? defaultFontSize.sp,
-          weight: item.fontWeight ?? defaultFontWeight,
+          size: defaultFontSize.sp,
+          weight: defaultFontWeight,
           color: color,
         ),
       ]
@@ -111,9 +107,7 @@ class BuildNavigation extends StatelessWidget {
     }
     // 改为左侧垂直导航 (NavigationRail 风格)
     return Container(
-      color: context.colors.scheme.surface,
-      width: 240.w, // 移除固定宽度，由外部决定
-      // height: double.infinity, // 移除无限高度，防止在 Column 中报错
+      //color: context.colors.scheme.surface,
       child: ws
           .toColumn(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly, // 改为居中

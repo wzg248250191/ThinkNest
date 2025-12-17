@@ -90,7 +90,6 @@ class SettingsPage extends GetView<SettingsController> {
   @override
   Widget build(BuildContext context) {
     return GetBuilder<SettingsController>(
-      init: SettingsController(),
       id: "settings",
       builder: (_) {
         return Scaffold(

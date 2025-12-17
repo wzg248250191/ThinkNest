@@ -26,6 +26,7 @@ class RoutePages {
       GetPage(
         name: RouteNames.systemMain,
         page: () => const MainPage(),
+        binding: MainBinding(), // 绑定 MainPage 所需依赖
       ),
        GetPage(
         name: RouteNames.systemSplash,

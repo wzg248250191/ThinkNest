@@ -58,7 +58,7 @@ class _MyAppState extends State<MyApp> {
 
         // 构建
         builder: (theme, darkTheme) => GetMaterialApp(
-          title: 'Flutter Demo',
+          title: '成长之光',
 
           // 主题
           theme: theme,

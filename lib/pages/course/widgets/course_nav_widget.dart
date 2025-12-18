@@ -7,40 +7,50 @@ import '../../../common/index.dart';
 class CourseNavWidget extends GetView<CourseController> {
   const CourseNavWidget({super.key});
 
+  // 导航行高常量
+  static double get _rowHeight => 64.h;
+
   @override
   Widget build(BuildContext context) { 
     return <Widget>[
-      _buildName().paddingRight(6.w).paddingRight(10.w),
+      _buildName().paddingRight(16.w),
       _buildRight(),
     ].toRow(mainAxisAlignment: MainAxisAlignment.center);
   }
 
-///构建分类名
+  /// 构建分类名
   Widget _buildName() {
     return GetBuilder<CourseController>(
       id: 'course_nav_name',
       builder: (_) {
         final items = controller.types;
-        final double rowHeight = 64.h;
         final navNames = List<Widget>.generate(items.length, (index) {
           final bool selected = controller.currentTypeIndex == index;
           return GestureDetector(
             onTap: () => controller.scrollToSection(index),
             behavior: HitTestBehavior.opaque,
             child: SizedBox(
-              height: rowHeight,
+              height: _rowHeight,
               width: 160.w,
               child: Align(
                 alignment: Alignment.centerRight,
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOutCubic,
-                  style: TextStyle(
-                    fontSize: selected ? 36.sp : 26.sp,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    color: selected ? CustomAppColors.primary : CustomAppColors.subText,
+                child: RepaintBoundary(
+                  child: AnimatedScale(
+                    scale: selected ? (36.sp / 26.sp) : 1.0,
+                    duration: Duration(milliseconds: controller.navAnimDurationMs),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.centerRight,
+                    child: AnimatedDefaultTextStyle(
+                      duration: Duration(milliseconds: controller.navAnimDurationMs),
+                      curve: Curves.easeOutCubic,
+                      style: TextStyle(
+                        fontSize: 26.sp,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? CustomAppColors.primary : CustomAppColors.subText,
+                      ),
+                      child: Text(items[index]),
+                    ),
                   ),
-                  child: Text(items[index]),
                 ),
               ),
             ),
@@ -67,14 +77,12 @@ class CourseNavWidget extends GetView<CourseController> {
       ),
     );
   }
-///构建空心圆点
-  Widget _buildDot()
- {
+  /// 构建空心圆点
+  Widget _buildDot() {
     final items = controller.types;
-    final double rowHeight = 64.h;
-    List<Widget> dots =List<Widget>.generate(items.length, (index) {
+    List<Widget> dots = List<Widget>.generate(items.length, (index) {
       return SizedBox(
-        height: rowHeight,
+        height: _rowHeight,
         child: Center(
           child: DotWidget(
             key: controller.dotKeys[index],

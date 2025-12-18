@@ -114,10 +114,16 @@ class _ImageWidgetState extends State<ImageWidget> {
 
     // asset 图片
     if (widget.type == ImageWidgetType.img && !isNetwork) {
+      final double dpr = MediaQuery.of(context).devicePixelRatio;
+      final int? cw = widget.width != null ? (widget.width! * dpr).round() : null;
+      final int? ch = widget.height != null ? (widget.height! * dpr).round() : null;
       ws = Image.asset(
         widget.path,
         fit: widget.fit,
         color: widget.color,
+        cacheWidth: cw,
+        cacheHeight: ch,
+        filterQuality: FilterQuality.low,
         // frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
         //   if (wasSynchronouslyLoaded) {
         //     return child;
@@ -221,7 +227,9 @@ class _ImageWidgetState extends State<ImageWidget> {
     }
 
     // 3 圆角
-    ws = ws.clipRRect(all: widget.radius ?? AppRadius.img);
+    if (widget.radius != null && (widget.radius ?? 0) > 0) {
+      ws = ws.clipRRect(all: widget.radius!);
+    }
 
     // 4 阴影
     // ws = ws.elevation(

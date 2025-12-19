@@ -7,11 +7,13 @@ import 'widgets/course_type.dart';
 import 'widgets/course.dart';
 import 'widgets/course_nav_widget.dart';
 import '../../common/index.dart';
+import '../system/main/controller.dart';
 
 class CoursePage extends GetView<CourseController> {
   const CoursePage({super.key});
 
   @override
+  /// 构建课程页面（课程列表 + 右侧分类导航）
   Widget build(BuildContext context) {
     return GetBuilder<CourseController>(
       id: "course",
@@ -24,20 +26,12 @@ class CoursePage extends GetView<CourseController> {
   }
 
   Widget _buildView() {
-    return Row(
-      children: [
-        // 左侧课程列表
-        SizedBox(
-          width: 1480.w,
-          child: _buildCourseList(),
-        ),
-        // 右侧导航栏
-        SizedBox(
-          width: 240.w,
-          child: const CourseNavWidget(),
-        ),
-      ],
-    ).constrained(height: 808.h).center();
+    return <Widget>[
+      // 左侧课程列表
+      SizedBox(width: 1480.w, child: _buildCourseList()),
+      // 右侧导航栏
+      SizedBox(width: 240.w, child: const CourseNavWidget()),
+    ].toRow().constrained(height: 808.h).center();
   }
 
   /// 使用 CustomScrollView + SliverGrid 构建课程列表
@@ -142,7 +136,14 @@ class CoursePage extends GetView<CourseController> {
             child: CourseWidget(
               key: ValueKey('${typeName}_$courseName'),
               name: courseName,
-              onTap: () => Get.snackbar('提示', '点击了 $courseName'),
+              onTap: () {
+                // 点击课程时，打开课程详情控制器
+                if (Get.isRegistered<MainController>()) {
+                  Get.find<MainController>().openCourseController(courseName);
+                  return;
+                }
+                Get.snackbar('提示', '点击了 $courseName');
+              },
             ),
           );
         },

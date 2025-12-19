@@ -128,7 +128,7 @@ class CourseController extends GetxController {
     _isNavigating = true;
     
     // 计算分类间隔距离
-    final distance = (index - currentTypeIndex).abs();
+    //final distance = (index - currentTypeIndex).abs();
     
     // 根据距离动态计算动画时长：基础 200ms + 每隔一个分类增加 80ms
     final durationMs = 300/*(200 + distance * 80).clamp(200, 600)*/;

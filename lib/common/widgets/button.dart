@@ -30,6 +30,9 @@ class ButtonWidget extends StatefulWidget {
   /// 文字字符串
   final String? text;
 
+  /// 文本字号
+  final double? fontSize;
+
   /// 文字颜色
   final Color? textColor;
 
@@ -81,6 +84,7 @@ class ButtonWidget extends StatefulWidget {
     this.scale = WidgetScale.medium,
     this.onTap,
     this.text,
+    this.fontSize,
     this.borderRadius,
     this.child,
     this.backgroundColor,
@@ -105,6 +109,7 @@ class ButtonWidget extends StatefulWidget {
     required this.scale,
     this.onTap,
     this.text,
+    this.fontSize,
     this.borderRadius,
     this.child,
     this.backgroundColor,
@@ -130,6 +135,7 @@ class ButtonWidget extends StatefulWidget {
     double? width,
     this.height,
     this.onTap,
+    this.fontSize,
     this.borderRadius,
     this.child,
     this.backgroundColor,
@@ -154,6 +160,7 @@ class ButtonWidget extends StatefulWidget {
     double? width,
     this.height,
     this.onTap,
+    this.fontSize,
     this.borderRadius,
     this.child,
     this.backgroundColor,
@@ -178,6 +185,7 @@ class ButtonWidget extends StatefulWidget {
     double? width,
     this.height,
     this.onTap,
+    this.fontSize,
     this.borderRadius,
     this.child,
     this.backgroundColor,
@@ -202,6 +210,7 @@ class ButtonWidget extends StatefulWidget {
     double? width,
     this.height,
     this.onTap,
+    this.fontSize,
     this.borderRadius,
     this.child,
     this.backgroundColor,
@@ -226,6 +235,7 @@ class ButtonWidget extends StatefulWidget {
     double? width,
     this.height,
     this.onTap,
+    this.fontSize,
     this.borderRadius,
     this.child,
     this.backgroundColor,
@@ -250,6 +260,7 @@ class ButtonWidget extends StatefulWidget {
     double? width,
     this.height,
     this.onTap,
+    this.fontSize,
     this.borderRadius,
     this.child,
     this.backgroundColor,
@@ -272,6 +283,7 @@ class ButtonWidget extends StatefulWidget {
     super.key,
     this.scale = WidgetScale.medium,
     this.text,
+    this.fontSize,
     double? width,
     this.height,
     this.onTap,
@@ -453,6 +465,7 @@ class _ButtonWidgetState extends State<ButtonWidget> {
         widget.text!,
         color: _textColor(),
         scale: widget.scale,
+        size: widget.fontSize,
         textAlign: TextAlign.center,
       ));
     }

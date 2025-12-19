@@ -1,5 +1,4 @@
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:think_nest/common/index.dart';
@@ -37,11 +36,11 @@ class SettingsPage extends GetView<SettingsController> {
                   ),
                   name: TextWidget.label(
                     '清理缓存',
-                    size: 26.w,
+                    size: 26.sp,
                   ),
                   title: TextWidget.label(
                     controller.cacheCountLabel,
-                    size: 26.w,
+                    size: 26.sp,
                   ),
                   subIcon: const Icon(Icons.chevron_right),
                   onTap: () => Get.dialog(
@@ -64,11 +63,11 @@ class SettingsPage extends GetView<SettingsController> {
                   ),
                   name: TextWidget.label(
                     '关于我们',
-                    size: 26.w,
+                    size: 26.sp,
                   ),
                   title: TextWidget.label(
                     '',
-                    size: 26.w,
+                    size: 26.sp,
                   ),
                   subIcon: const Icon(Icons.chevron_right),
                   onTap: () => controller.openAbout(),
@@ -93,41 +92,14 @@ class SettingsPage extends GetView<SettingsController> {
       id: "settings",
       builder: (_) {
         return Scaffold(
-          appBar:  _buildAppBar(context),
+        appBar: AppbarWidget(
+            title: controller.isAbout ? '关于我们' : '设置',
+            isBack: controller.isAbout,
+            onTap: controller.closeAbout,
+          ),
           body: _buildView(),
         );
       },
     );
   }
-
-  PreferredSize _buildAppBar(BuildContext contex) {
-    return PreferredSize(
-      preferredSize: Size.fromHeight(160.h),
-      child: AppBar(
-        backgroundColor: CustomAppColors.card,
-        elevation: 1,
-        foregroundColor: CustomAppColors.text,
-        leading: controller.isAbout
-            ? IconButton(
-                icon: Transform.rotate(
-                  angle: math.pi,
-                  child: ImageWidget.svg(
-                    AssetsSvgs.settingsArrowSvg,
-                    width: 20.w,
-                    height: 36.h,
-                  ),
-                ),
-                onPressed: controller.closeAbout,
-              )
-            : null,
-        title: Text(
-          controller.isAbout ? "关于我们" : "设置",
-          style: TextStyle(color: CustomAppColors.text, fontSize: 40.sp),
-        ),
-        centerTitle: true,
-        toolbarHeight: 160.h,
-        automaticallyImplyLeading: false,
-      ),
-    );
-  } 
 }

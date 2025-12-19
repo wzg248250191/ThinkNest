@@ -81,27 +81,10 @@ class IntegrationPage extends GetView<IntegrationController> {
       id: "integration",
       builder: (_) {
         return  Scaffold(
-            appBar: _buildAppBar(context),
+            appBar: AppbarWidget(title: '一体化设置'),
             body: _buildView(),
           );
       },
-    );
-  }
-
-  PreferredSize _buildAppBar(BuildContext contex) {
-    return PreferredSize(
-      preferredSize: Size.fromHeight(160.h),
-      child: AppBar(
-        backgroundColor: CustomAppColors.card,
-        elevation: 1,
-        title: Text(
-          "一体化设置",
-          style: TextStyle(color: CustomAppColors.text, fontSize: 40.sp),
-        ),
-        centerTitle: true,
-        toolbarHeight: 160.h,
-        automaticallyImplyLeading: false,
-      ),
     );
   }
 }

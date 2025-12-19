@@ -18,6 +18,7 @@ class _MainPageState extends State<MainPage>
   bool get wantKeepAlive => true;
 
   @override
+  /// 构建主页面并保持页面状态不被回收
   Widget build(BuildContext context) {
     super.build(context);
     return const _MainViewGetX();
@@ -28,6 +29,7 @@ class _MainViewGetX extends GetView<MainController> {
   const _MainViewGetX();
 
   // 主视图
+  /// 构建主页面内容与全屏课程覆盖层，并处理返回键逻辑
   Widget _buildView(BuildContext context) {
     return PopScope(
       // 允许返回
@@ -37,6 +39,11 @@ class _MainViewGetX extends GetView<MainController> {
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         // 如果返回，则不执行退出请求
         if (didPop) {
+          return;
+        }
+
+        if (controller.showCourseDetail) {
+          controller.closeCourseController();
           return;
         }
 
@@ -50,7 +57,9 @@ class _MainViewGetX extends GetView<MainController> {
         extendBody: true,
         resizeToAvoidBottomInset: false,
         // 内容页
-        body: <Widget>[
+        body: Stack(
+          children: [
+           <Widget>[
           <Widget>[
              ImageWidget.img(
               AssetsImages.logoPng,
@@ -133,13 +142,27 @@ class _MainViewGetX extends GetView<MainController> {
               },
             ),
           )
-        ].toRow()
+        ].toRow(),
+        GetBuilder<MainController>(
+          id: 'main_overlay',
+          builder: (_) {
+            if (!controller.showCourseDetail) {
+              return const SizedBox.shrink();
+            }
+            return const Positioned.fill(
+              child: CourseControllerWidget(),
+            );
+          },
+        ),
+        ]
+      )
       ),
     );
   }
 
 
   @override
+   /// GetX 驱动的主页面入口
    Widget build(BuildContext context) {
    return GetBuilder<MainController>(
       id: "main",

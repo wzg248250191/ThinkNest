@@ -1,7 +1,6 @@
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:think_nest/common/index.dart';
 
 import '../index.dart';
 
@@ -14,30 +13,20 @@ class DeviceConfigView extends GetView<IntegrationController> {
   }
 
   Widget _buildView() {
-    return <Widget>[
-      _buildTopView(),
-      _buildDeviceConfigItem(),
-    ].toColumn();
-  }
+    const titles = [
+      '墙面主机',
+      '墙面投影',
+      '桌面主机',
+      '桌面投影',
+      '灯光',
+      '窗帘',
+    ];
 
-  Widget _buildTopView() {
-    return <Widget>[
-      ButtonWidget.icon(   
-       ImageWidget.svg(
-                  AssetsSvgs.settingsArrowSvg,
-                  width: 20.w,
-                  height: 36.h,
-                  color: CustomAppColors.primary,
-                ),
-        onTap: () => Get.back(),
-      ),
-      TextWidget.label(
-        '设备配置',       
-      ),
-    ].toRow().expanded();
-  }
-
-  Widget _buildDeviceConfigItem() {
-    return <Widget>[].toColumn();
+    return ListView.separated(
+      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 40.h),
+      itemCount: titles.length,
+      separatorBuilder: (_, __) => SizedBox(height: 24.h),
+      itemBuilder: (_, index) => DeviceInfoItem(title: titles[index]),
+    );
   }
 }

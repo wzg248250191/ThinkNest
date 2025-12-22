@@ -13,6 +13,8 @@ class InputWidget extends StatefulWidget {
     this.obscureText = false,
     this.cleanable = true,
     this.readOnly = false,
+    this.borderWidth,
+    this.focusBorderWidth,
     this.onChanged,
     this.keyboardType,
     this.autofocus,
@@ -42,6 +44,12 @@ class InputWidget extends StatefulWidget {
 
   /// 是否只读
   final bool? readOnly;
+
+  /// 边框宽度
+  final double? borderWidth;
+
+  /// 聚焦边框宽度
+  final double? focusBorderWidth;
 
   /// 输入变化回调
   final Function(String)? onChanged;
@@ -182,7 +190,7 @@ class _InputWidgetState extends State<InputWidget> {
         borderRadius: BorderRadius.circular(AppRadius.input),
         border: Border.all(
           color: hasFocus == true ? colorScheme.primary : Colors.transparent,
-          width: hasFocus == true ? 2 : 0,
+          width: hasFocus == true ? (widget.focusBorderWidth ?? 2) : 0,
         ),
       ),
       child: Container(
@@ -192,7 +200,7 @@ class _InputWidgetState extends State<InputWidget> {
           borderRadius: BorderRadius.circular(AppRadius.input),
           border: Border.all(
             color: colorScheme.outline,
-            width: 0.5,
+            width: widget.borderWidth ?? 0.5,
           ),
         ),
         child: <Widget>[

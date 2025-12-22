@@ -19,7 +19,7 @@ class TextWidget extends StatelessWidget {
     super.key,
     required this.text,
     this.type,
-    this.size,
+    this.fontSize,
     this.scale,
     this.textStyle,
     this.color,
@@ -50,7 +50,7 @@ class TextWidget extends StatelessWidget {
   final Color? color;
 
   /// 大小
-  final double? size;
+  final double? fontSize;
 
   /// 重量
   final FontWeight? weight;
@@ -72,7 +72,7 @@ class TextWidget extends StatelessWidget {
     this.text, {
     super.key,
     this.scale,
-    this.size,
+    this.fontSize,
     this.color,
     this.weight = FontWeight.w800,
     this.maxLines,
@@ -88,7 +88,7 @@ class TextWidget extends StatelessWidget {
     this.text, {
     super.key,
     this.scale,
-    this.size,
+    this.fontSize,
     this.color,
     this.weight = FontWeight.w600,
     this.maxLines,
@@ -104,7 +104,7 @@ class TextWidget extends StatelessWidget {
     this.text, {
     super.key,
     this.scale,
-    this.size,
+    this.fontSize,
     this.color,
     this.weight = FontWeight.w600,
     this.maxLines,
@@ -120,7 +120,7 @@ class TextWidget extends StatelessWidget {
     this.text, {
     super.key,
     this.scale,
-    this.size,
+    this.fontSize,
     this.color,
     this.weight = FontWeight.w600,
     this.maxLines,
@@ -136,7 +136,7 @@ class TextWidget extends StatelessWidget {
     this.text, {
     super.key,
     this.scale,
-    this.size,
+    this.fontSize,
     this.color,
     this.weight = FontWeight.w400,
     this.maxLines,
@@ -152,7 +152,7 @@ class TextWidget extends StatelessWidget {
     this.text, {
     super.key,
     this.scale,
-    this.size,
+    this.fontSize,
     this.color,
     this.weight = FontWeight.w400,
     this.maxLines,
@@ -168,7 +168,7 @@ class TextWidget extends StatelessWidget {
     this.text, {
     super.key,
     this.scale,
-    this.size,
+    this.fontSize,
     this.color,
     this.weight = FontWeight.w400,
     this.maxLines,
@@ -183,7 +183,7 @@ class TextWidget extends StatelessWidget {
   double _fontSize() {
     // 计算字体
     // https://tailwindcss.com/docs/font-size
-    double fontSize = size ?? 0;
+    double fontSize = this.fontSize ?? 0;
     if (fontSize == 0) {
       switch (type) {
         case TextWidgetType.h1:

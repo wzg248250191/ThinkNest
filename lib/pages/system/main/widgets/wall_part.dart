@@ -12,12 +12,13 @@ class Wallpart extends StatelessWidget {
   Widget build(BuildContext context) {
     return _buildView(context);
   }
-   Widget _buildView(BuildContext context) {
+  Widget _buildView(BuildContext context) {
     return  <Widget>[
         _buildCard('学生互动区'),
         _buildCard('老师讲解区区'),
         _buildCard( '学生互动区')
-        ].toRow(mainAxisAlignment: MainAxisAlignment.spaceAround).paddingTop(66.w);
+        ].toRow(mainAxisAlignment: MainAxisAlignment.spaceEvenly,crossAxisAlignment: CrossAxisAlignment.center)
+        .alignment(Alignment.center).expanded();
    }
 
   /// 构建墙面区域内容布局
@@ -25,9 +26,9 @@ class Wallpart extends StatelessWidget {
     return <Widget>[
       TextWidget.label(
         title,
-        size: 36.sp,
+        fontSize: 36.sp,
       ),
-     SwitchButton(
+     ToggleButton(
             firstText: '关闭墙面',
             secondText: '开启墙面',
             width: 160.w,
@@ -42,7 +43,7 @@ class Wallpart extends StatelessWidget {
              borderColor: CustomAppColors.text, // 可选：自定义边框色
             onChanged: (v) {},
           ),
-           SwitchButton(
+           ToggleButton(
              firstText: '关闭互动',
             secondText: '开启互动',
             width: 160.w,

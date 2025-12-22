@@ -1,103 +1,153 @@
-import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 
-import '../index.dart';
+import 'button.dart';
+import '../style/scale.dart';
+import '../style/border.dart';
+import '../style/radius.dart';
 
+/// 点击后在两段文案之间切换的按钮组件
+class ToggleButton extends StatefulWidget {
+  /// 第一段文案（value=false 时展示）
+  final String firstText;
 
-class ToggleButton extends StatelessWidget {
-  final List<String> labels;
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-  final double buttonWidth;
-  final double buttonHeight;
-  final double groupRadius;
-  final double fontSize;
-  final double borderWidth;
-  final Color groupBackgroundColor;
-  final Color unselectedBackgroundColor;
-  final Color borderColor;
-  final Color dividerColor;
+  /// 第二段文案（value=true 时展示）
+  final String secondText;
+
+  /// 当前状态（传入则为受控组件；不传则内部自管理）
+  final bool? value;
+
+  /// 状态变化回调
+  final ValueChanged<bool>? onChanged;
+
+  /// 未选中态样式
+  final ButtonWidgetVariant variantOff;
+
+  /// 选中态样式
+  final ButtonWidgetVariant variantOn;
+
+  /// 按钮尺寸
+  final WidgetScale scale;
+
+  /// 宽度
+  final double? width;
+
+  /// 高度
+  final double? height;
+
+  /// 文本字号
+  final double? fontSize;
+
+  /// 圆角
+  final double? borderRadius;
+
+  /// 未选中态背景色（仅当 variantOff 支持时生效）
+  final Color? backgroundColorOff;
+
+  /// 选中态背景色（仅当 variantOn 支持时生效）
+  final Color? backgroundColorOn;
+
+  /// 未选中态文字颜色
+  final Color? textColorOff;
+
+  /// 选中态文字颜色
+  final Color? textColorOn;
+
+  /// 启用
+  final bool enabled;
+
+  /// 外层边框颜色（当所选 variant 非 outline 时生效）
+  final Color? borderColor;
 
   const ToggleButton({
     super.key,
-    required this.labels,
-    required this.selectedIndex,
-    required this.onSelected,
-    required this.buttonWidth,
-    required this.buttonHeight,
-    required this.groupRadius,
-    required this.fontSize,
-    required this.borderWidth,
-    this.groupBackgroundColor = CustomAppColors.card,
-    this.unselectedBackgroundColor = CustomAppColors.card,
-    this.borderColor = CustomAppColors.border,
-    this.dividerColor = CustomAppColors.border,
-  }) : assert(labels.length >= 2, 'labels 至少需要 2 个元素');
+    required this.firstText,
+    required this.secondText,
+    this.value,
+    this.onChanged,
+    this.variantOff = ButtonWidgetVariant.ghost,
+    this.variantOn = ButtonWidgetVariant.primary,
+    this.scale = WidgetScale.medium,
+    this.width,
+    this.height,
+    this.fontSize,
+    this.borderRadius,
+    this.backgroundColorOff,
+    this.backgroundColorOn,
+    this.textColorOff,
+    this.textColorOn,
+    this.enabled = true,
+    this.borderColor,
+  }) : assert(firstText != '' && secondText != '', '文案不能为空');
 
   @override
-  Widget build(BuildContext context) {
-    final groupWidth =
-        buttonWidth * labels.length + borderWidth * (labels.length - 1);
-
-    Widget buildSegment(int index) {
-      final bool isFirst = index == 0;
-      final bool isLast = index == labels.length - 1;
-      final bool selected = selectedIndex == index;
-      final BorderRadius radius = BorderRadius.horizontal(
-        left: isFirst ? Radius.circular(groupRadius) : Radius.zero,
-        right: isLast ? Radius.circular(groupRadius) : Radius.zero,
-      );
-
-      return SizedBox(
-        width: buttonWidth,
-        height: buttonHeight,
-        child: ClipRRect(
-          borderRadius: radius,
-          child: ButtonWidget(
-            variant: selected
-                ? ButtonWidgetVariant.primary
-                : ButtonWidgetVariant.ghost,
-            text: labels[index],
-            fontSize: fontSize,
-            backgroundColor: selected ? null : unselectedBackgroundColor,
-            width: buttonWidth,
-            height: buttonHeight,
-            borderRadius: 0,
-            onTap: () => onSelected(index),
-          ),
-        ),
-      );
-    }
-
-    final divider = Container(
-      width: borderWidth,
-      height: buttonHeight,
-      color: dividerColor,
-    );
-
-    final segments = <Widget>[];
-    for (int i = 0; i < labels.length; i++) {
-      segments.add(buildSegment(i));
-      if (i != labels.length - 1) {
-        segments.add(divider);
-      }
-    }
-
-    return SizedBox(
-      width: groupWidth,
-      height: buttonHeight,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: groupBackgroundColor,
-          borderRadius: BorderRadius.circular(groupRadius),
-          border: Border.all(
-            color: borderColor,
-            width: borderWidth,
-          ),
-        ),
-        child: segments.toRow(),
-      ),
-    );
-  }
+  /// 创建可切换按钮状态
+  State<ToggleButton> createState() => _ToggleButtonState();
 }
 
+class _ToggleButtonState extends State<ToggleButton> {
+  late bool _value = widget.value ?? false;
+
+  @override
+  /// 同步外部受控 value 到内部状态
+  void didUpdateWidget(covariant ToggleButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != null && widget.value != oldWidget.value) {
+      _value = widget.value!;
+    }
+  }
+
+  /// 执行切换并通知外部
+  void _toggle() {
+    final bool current = widget.value ?? _value;
+    final bool next = !current;
+
+    if (widget.value == null) {
+      setState(() => _value = next);
+    }
+    widget.onChanged?.call(next);
+  }
+
+  @override
+  /// 构建可切换文案按钮
+  Widget build(BuildContext context) {
+    final bool current = widget.value ?? _value;
+    final String text = current ? widget.secondText : widget.firstText;
+    final bool isOutlineVariantCurrent =
+        (current ? widget.variantOn : widget.variantOff) ==
+            ButtonWidgetVariant.outline;
+
+    final ButtonWidget child = ButtonWidget(
+      variant: current ? widget.variantOn : widget.variantOff,
+      scale: widget.scale,
+      text: text,
+      fontSize: widget.fontSize,
+      width: widget.width,
+      height: widget.height,
+      borderRadius: widget.borderRadius,
+      borderColor: isOutlineVariantCurrent ? widget.borderColor : null,
+      backgroundColor:
+          current ? widget.backgroundColorOn : widget.backgroundColorOff,
+      textColor: current ? widget.textColorOn : widget.textColorOff,
+      enabled: widget.enabled,
+      onTap: widget.enabled ? _toggle : null,
+    );
+
+    final bool isOutlineVariant =
+        (current ? widget.variantOn : widget.variantOff) ==
+            ButtonWidgetVariant.outline;
+
+    if (widget.borderColor != null && !isOutlineVariant) {
+      final BorderRadius br =
+          BorderRadius.circular(widget.borderRadius ?? AppRadius.button);
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: widget.borderColor!, width: AppBorder.button),
+          borderRadius: br,
+        ),
+        child: ClipRRect(borderRadius: br, child: child),
+      );
+    }
+
+    return child;
+  }
+}

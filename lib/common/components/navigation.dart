@@ -79,7 +79,7 @@ class BuildNavigation extends StatelessWidget {
         ).paddingBottom(20.h),
         TextWidget.label(
           item.label.tr,
-          size: defaultFontSize.sp,
+          fontSize: defaultFontSize.sp,
           weight: defaultFontWeight,
           color: color,
         ),

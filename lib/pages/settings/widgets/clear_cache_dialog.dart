@@ -23,7 +23,7 @@ class ClearCacheDialog extends StatelessWidget {
         child: <Widget>[
           TextWidget.label(
             '确定清空本地缓存数据？',
-            size: 26.w,
+            fontSize: 26.w,
             textAlign: TextAlign.center,
           ).paddingTop(30.w).paddingBottom(50.h),
           Container(height: 3.h).decorated(color: CustomAppColors.border),
@@ -38,7 +38,7 @@ class ClearCacheDialog extends StatelessWidget {
                         variant: ButtonWidgetVariant.ghost,
                         scale: WidgetScale.medium,
                         onTap: () => Get.back(),                      
-                        child: TextWidget.label('取消', size: 32.w),
+                        child: TextWidget.label('取消', fontSize: 32.w),
                       ),
                     ),
                   ),
@@ -57,7 +57,7 @@ class ClearCacheDialog extends StatelessWidget {
                           Get.back();
                           _showSuccessToast();
                         },                    
-                        child: TextWidget.label('确定', size: 32.w),
+                        child: TextWidget.label('确定', fontSize: 32.w),
                       ),
                     ),
                   ),
@@ -86,7 +86,7 @@ class ClearCacheDialog extends StatelessWidget {
             children: [
               Icon(Icons.check, color: Colors.green, size: 72.w),
               SizedBox(height: 20.h),
-              TextWidget.label('清除成功', size: 32.w),
+              TextWidget.label('清除成功', fontSize: 32.w),
             ],
           ),
         ),

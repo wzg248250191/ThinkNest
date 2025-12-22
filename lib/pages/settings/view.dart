@@ -36,11 +36,11 @@ class SettingsPage extends GetView<SettingsController> {
                   ),
                   name: TextWidget.label(
                     '清理缓存',
-                    size: 26.sp,
+                    fontSize: 26.sp,
                   ),
                   title: TextWidget.label(
                     controller.cacheCountLabel,
-                    size: 26.sp,
+                    fontSize: 26.sp,
                   ),
                   subIcon: const Icon(Icons.chevron_right),
                   onTap: () => Get.dialog(
@@ -63,11 +63,11 @@ class SettingsPage extends GetView<SettingsController> {
                   ),
                   name: TextWidget.label(
                     '关于我们',
-                    size: 26.sp,
+                    fontSize: 26.sp,
                   ),
                   title: TextWidget.label(
                     '',
-                    size: 26.sp,
+                    fontSize: 26.sp,
                   ),
                   subIcon: const Icon(Icons.chevron_right),
                   onTap: () => controller.openAbout(),

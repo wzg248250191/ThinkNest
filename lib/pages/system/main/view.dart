@@ -150,7 +150,7 @@ class _MainViewGetX extends GetView<MainController> {
               return const SizedBox.shrink();
             }
             return const Positioned.fill(
-              child: CourseControllerWidget(),
+              child: CourseDetailOverlay(),
             );
           },
         ),

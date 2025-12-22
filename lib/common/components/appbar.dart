@@ -54,7 +54,7 @@ class AppbarWidget extends StatelessWidget implements PreferredSizeWidget {
       title: TextWidget(
         text: title,
         color: CustomAppColors.text,
-        size: 40.sp,
+        fontSize: 40.sp,
       ),
       centerTitle: true,
       toolbarHeight: 160.h,

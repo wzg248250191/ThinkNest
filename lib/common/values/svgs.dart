@@ -20,5 +20,14 @@ static const backArrowSvg = 'assets/svgs/course/back_arrow.svg';
 static const courseCategoryTimelineSvg = 'assets/svgs/course/course_category_timeline.svg';
 static const courseFullscreenSvg = 'assets/svgs/course/course_fullscreen.svg';
 static const courseHeaderLineSvg = 'assets/svgs/course/course_header_line.svg';
+//课程控制
 static const coursePlayDesktopSvg = 'assets/svgs/course/course_play_desktop.svg';
+static const deskSvg = 'assets/svgs/course/desk.svg';
+static const deskbgSvg = 'assets/svgs/course/deskbg.svg';
+
+static const closeSvg = 'assets/svgs/course/close.svg';
+static const openSvg = 'assets/svgs/course/open.svg';
+static const volumeSvg = 'assets/svgs/course/volume.svg';
+static const volumeBgSvg = 'assets/svgs/course/volumeBg.svg';
+static const muteSvg = 'assets/svgs/course/mute.svg';
 }

@@ -465,7 +465,7 @@ class _ButtonWidgetState extends State<ButtonWidget> {
         widget.text!,
         color: _textColor(),
         scale: widget.scale,
-        size: widget.fontSize,
+        fontSize: widget.fontSize,
         textAlign: TextAlign.center,
       ));
     }

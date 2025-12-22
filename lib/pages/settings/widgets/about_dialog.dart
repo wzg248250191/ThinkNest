@@ -21,7 +21,7 @@ class AboutDialogWidget extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 38.h),
       child: TextWidget.label(
         aboutContent,
-        size: 32.w,
+        fontSize: 32.w,
         textStyle: TextStyle(
           letterSpacing: 1.w,
           height: 60.w / 32.w,

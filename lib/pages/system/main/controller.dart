@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
+import '../../index.dart';
 
 class MainController extends GetxController {
   MainController();
@@ -12,16 +16,6 @@ class MainController extends GetxController {
 
   // 退出请求时间
   DateTime? currentBackPressTime;
-
-  /// 课程控制：互斥按钮当前选中索引（0/1）
-  int courseControlSelectedIndex = 0;
-
-  /// 设置课程控制互斥按钮选中项并刷新 UI
-  void setCourseControlSelectedIndex(int index) {
-    courseControlSelectedIndex = index;
-    update(['course_control_toggle']);
-  }
-
 
   /// 初始化主页面数据并触发首次刷新
   _initData() {
@@ -65,27 +59,28 @@ class MainController extends GetxController {
     return true;
   }
 
-///课程控制
-  String? currentCourseName;
+  /// 课程详情覆盖层是否展示
   bool showCourseDetail = false;
-  //打开课程控制
+
   /// 打开全屏课程详情覆盖层，并保证停留在课程 tab
   void openCourseController(String name) {
-    currentCourseName = name;
     showCourseDetail = true;
-    courseControlSelectedIndex = 0;
     if (currentIndex != 0) {
       currentIndex = 0;
       update(['content', 'navigation']);
     }
-    update(['course_control_toggle']);
+    if (Get.isRegistered<SingleCourseController>()) {
+      unawaited(Get.find<SingleCourseController>().openCourse(name));
+    }
     update(['main_overlay']);
   }
 
   /// 关闭全屏课程详情覆盖层
   void closeCourseController() {
     showCourseDetail = false;
-    currentCourseName = null;
+    if (Get.isRegistered<SingleCourseController>()) {
+      unawaited(Get.find<SingleCourseController>().closeCourse());
+    }
     update(['main_overlay']);
   }
 

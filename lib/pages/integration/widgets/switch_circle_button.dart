@@ -140,7 +140,7 @@ class SwitchCircleButton extends StatelessWidget {
           name,
           color: scheme.onSurfaceVariant,
           textAlign: TextAlign.center,
-          size: 36.w,
+          fontSize: 36.w,
         ),
       ],
     );

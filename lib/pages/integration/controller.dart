@@ -1,9 +1,28 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:think_nest/common/index.dart';
+
+import 'models/device_info_config.dart';
 import 'models/switch_circle_state.dart';
 
 class IntegrationController extends GetxController {
   IntegrationController();
+
+  static const String _deviceConfigsKey = 'integration_device_configs_v1';
+
+  static const List<String> deviceTitles = <String>[
+    '墙面主机',
+    '墙面投影',
+    '桌面主机',
+    '桌面投影',
+    '灯光',
+    '窗帘',
+  ];
+
+  final Map<String, DeviceInfoConfig> deviceConfigs = <String, DeviceInfoConfig>{};
 
   //总开关
   SwitchCircleState mainState = const SwitchCircleState(enabled: true, isOn: true);
@@ -46,6 +65,58 @@ void setDeskState(SwitchCircleState value) {
   void setCurtainState(SwitchCircleState value) {
     curtainState = value;
     update(["integration"]);
+  }
+
+  DeviceInfoConfig getDeviceConfig(String title) {
+    return deviceConfigs[title] ?? const DeviceInfoConfig();
+  }
+
+  Future<void> setDeviceConfig(String title, DeviceInfoConfig config) async {
+    deviceConfigs[title] = config;
+    await _persistDeviceConfigs();
+    update(<String>["device_config"]);
+  }
+
+  Future<void> loadDeviceConfigs() async {
+    final String raw = Storage().getString(_deviceConfigsKey);
+    if (raw.isEmpty) {
+      deviceConfigs
+        ..clear()
+        ..addEntries(
+          deviceTitles.map((t) => MapEntry<String, DeviceInfoConfig>(t, const DeviceInfoConfig())),
+        );
+      update(<String>["device_config"]);
+      return;
+    }
+
+    try {
+      final dynamic decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final map = decoded.cast<String, dynamic>();
+        deviceConfigs.clear();
+        for (final entry in map.entries) {
+          final dynamic value = entry.value;
+          if (value is Map) {
+            deviceConfigs[entry.key] = DeviceInfoConfig.fromJson(value.cast<String, dynamic>());
+          }
+        }
+      }
+    } catch (_) {
+      deviceConfigs.clear();
+    }
+
+    for (final title in deviceTitles) {
+      deviceConfigs.putIfAbsent(title, () => const DeviceInfoConfig());
+    }
+
+    update(<String>["device_config"]);
+  }
+
+  Future<void> _persistDeviceConfigs() async {
+    final Map<String, dynamic> json = deviceConfigs.map(
+      (k, v) => MapEntry<String, dynamic>(k, v.toJson()),
+    );
+    await Storage().setJson(_deviceConfigsKey, json);
   }
 
   void onDeviceConfigEntryTap() {
@@ -100,10 +171,11 @@ void setDeskState(SwitchCircleState value) {
 
   void onTap() {}
 
-  // @override
-  // void onInit() {
-  //   super.onInit();
-  // }
+  @override
+  void onInit() {
+    super.onInit();
+    unawaited(loadDeviceConfigs());
+  }
 
   @override
   void onReady() {

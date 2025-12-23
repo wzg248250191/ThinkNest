@@ -13,20 +13,30 @@ class DeviceConfigView extends GetView<IntegrationController> {
   }
 
   Widget _buildView() {
-    const titles = [
-      '墙面主机',
-      '墙面投影',
-      '桌面主机',
-      '桌面投影',
-      '灯光',
-      '窗帘',
-    ];
-
-    return ListView.separated(
-      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 40.h),
-      itemCount: titles.length,
-      separatorBuilder: (_, __) => SizedBox(height: 24.h),
-      itemBuilder: (_, index) => DeviceInfoItem(title: titles[index]),
+    return GetBuilder<IntegrationController>(
+      id: 'device_config',
+      builder: (_) {
+        final titles = IntegrationController.deviceTitles;
+        return ListView.separated(
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 40.h),
+          itemCount: titles.length,
+          separatorBuilder: (_, __) => SizedBox(height: 24.h),
+          itemBuilder: (_, index) {
+            final title = titles[index];
+            final cfg = controller.getDeviceConfig(title);
+            return DeviceInfoItem(
+              title: title,
+              enabled: cfg.enabled,
+              ip: cfg.ip,
+              port: cfg.port,
+              openCmd: cfg.openCmd,
+              closeCmd: cfg.closeCmd,
+              queryCmd: cfg.queryCmd,
+              onChanged: (next) => controller.setDeviceConfig(title, next),
+            );
+          },
+        );
+      },
     );
   }
 }

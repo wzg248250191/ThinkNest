@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 
 import '../../../common/index.dart';
+import '../models/device_info_config.dart';
 
 class DeviceInfoItem extends StatefulWidget {
   const DeviceInfoItem({
@@ -13,6 +16,7 @@ class DeviceInfoItem extends StatefulWidget {
     this.openCmd,
     this.closeCmd,
     this.queryCmd,
+    this.onChanged,
   });
   
   final String title;//名字
@@ -22,6 +26,7 @@ class DeviceInfoItem extends StatefulWidget {
   final String? openCmd;//打开指令
   final String? closeCmd;//关闭指令  
   final String? queryCmd;//查询指令
+  final ValueChanged<DeviceInfoConfig>? onChanged;
 
   @override
   State<DeviceInfoItem> createState() => _DeviceInfoItemState();
@@ -34,6 +39,9 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
   late final TextEditingController _openCmdController;
   late final TextEditingController _closeCmdController;
   late final TextEditingController _queryController;
+  late final VoidCallback _fieldsListener;
+  Timer? _emitDebounce;
+  bool _syncing = false;
 
   @override
   void initState() {
@@ -44,16 +52,135 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
     _openCmdController = TextEditingController(text: widget.openCmd ?? '');
     _closeCmdController = TextEditingController(text: widget.closeCmd ?? '');
     _queryController = TextEditingController(text: widget.queryCmd ?? '');
+
+    _fieldsListener = _onFieldsChanged;
+    _ipController.addListener(_fieldsListener);
+    _portController.addListener(_fieldsListener);
+    _openCmdController.addListener(_fieldsListener);
+    _closeCmdController.addListener(_fieldsListener);
+    _queryController.addListener(_fieldsListener);
   }
 
   void _onEnabledChanged(bool value) {
     setState(() {
       _enabled = value;
     });
+    _scheduleEmit();
+  }
+
+  void _onFieldsChanged() {
+    _scheduleEmit();
+  }
+
+  void _scheduleEmit() {
+    if (_syncing) {
+      return;
+    }
+    if (widget.onChanged == null) {
+      return;
+    }
+    _emitDebounce?.cancel();
+    _emitDebounce = Timer(const Duration(milliseconds: 250), _emit);
+  }
+
+  void _emit() {
+    final cb = widget.onChanged;
+    if (cb == null) {
+      return;
+    }
+    cb(_currentConfig());
+  }
+
+  DeviceInfoConfig _currentConfig() {
+    return DeviceInfoConfig(
+      enabled: _enabled,
+      ip: _ipController.text,
+      port: _portController.text,
+      openCmd: _openCmdController.text,
+      closeCmd: _closeCmdController.text,
+      queryCmd: _queryController.text,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant DeviceInfoItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final nextIp = widget.ip ?? '';
+    final nextPort = widget.port ?? '';
+    final nextOpenCmd = widget.openCmd ?? '';
+    final nextCloseCmd = widget.closeCmd ?? '';
+    final nextQueryCmd = widget.queryCmd ?? '';
+
+    final bool enabledChanged = widget.enabled != _enabled;
+    final bool ipChanged = nextIp != _ipController.text;
+    final bool portChanged = nextPort != _portController.text;
+    final bool openCmdChanged = nextOpenCmd != _openCmdController.text;
+    final bool closeCmdChanged = nextCloseCmd != _closeCmdController.text;
+    final bool queryChanged = nextQueryCmd != _queryController.text;
+
+    if (!enabledChanged &&
+        !ipChanged &&
+        !portChanged &&
+        !openCmdChanged &&
+        !closeCmdChanged &&
+        !queryChanged) {
+      return;
+    }
+
+    _syncing = true;
+    if (enabledChanged) {
+      setState(() {
+        _enabled = widget.enabled;
+      });
+    }
+    if (ipChanged) {
+      _ipController.value = _ipController.value.copyWith(
+        text: nextIp,
+        selection: TextSelection.collapsed(offset: nextIp.length),
+        composing: TextRange.empty,
+      );
+    }
+    if (portChanged) {
+      _portController.value = _portController.value.copyWith(
+        text: nextPort,
+        selection: TextSelection.collapsed(offset: nextPort.length),
+        composing: TextRange.empty,
+      );
+    }
+    if (openCmdChanged) {
+      _openCmdController.value = _openCmdController.value.copyWith(
+        text: nextOpenCmd,
+        selection: TextSelection.collapsed(offset: nextOpenCmd.length),
+        composing: TextRange.empty,
+      );
+    }
+    if (closeCmdChanged) {
+      _closeCmdController.value = _closeCmdController.value.copyWith(
+        text: nextCloseCmd,
+        selection: TextSelection.collapsed(offset: nextCloseCmd.length),
+        composing: TextRange.empty,
+      );
+    }
+    if (queryChanged) {
+      _queryController.value = _queryController.value.copyWith(
+        text: nextQueryCmd,
+        selection: TextSelection.collapsed(offset: nextQueryCmd.length),
+        composing: TextRange.empty,
+      );
+    }
+    _syncing = false;
   }
 
   @override
   void dispose() {
+    _emitDebounce?.cancel();
+    _emitDebounce = null;
+    _ipController.removeListener(_fieldsListener);
+    _portController.removeListener(_fieldsListener);
+    _openCmdController.removeListener(_fieldsListener);
+    _closeCmdController.removeListener(_fieldsListener);
+    _queryController.removeListener(_fieldsListener);
     _ipController.dispose();
     _portController.dispose();
     _openCmdController.dispose();

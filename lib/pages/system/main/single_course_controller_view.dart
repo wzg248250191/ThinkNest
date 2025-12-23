@@ -108,6 +108,10 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
     return GetBuilder<SingleCourseController>(
       id: 'course_control_toggle',
       builder: (_) {
+        // 获取连接状态
+        final isWallConnected = controller.isWallConnected;
+        final isDeskConnected = controller.isDeskConnected;
+        
         return <Widget>[
           TextWidget(
             text: "课程开关",
@@ -120,17 +124,19 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
               .decorated(color: CustomAppColors.border)
               .paddingHorizontal(40.w)
               .paddingTop(25.w),
+          // 连接状态提示
+          _buildConnectionStatus(isWallConnected, isDeskConnected).paddingTop(10.h),
           <Widget>[
             TextWidget.label('整体控制', fontSize: 28.sp).paddingLeft(37.w),
             const Spacer(),
             Toggle(
               firstIcon: ImageWidget.svg(
-                AssetsSvgs.openSvg,
+                AssetsSvgs.closeSvg,
                 width: 90.w,
                 height: 30.h,
               ),
               secondIcon: ImageWidget.svg(
-                AssetsSvgs.closeSvg,
+                AssetsSvgs.openSvg,
                 width: 90.w,
                 height: 30.h,
               ),
@@ -140,15 +146,21 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
           ].toRow().paddingTop(20.h),
           <Widget>[
             TextWidget.label('墙面', fontSize: 28.sp).paddingLeft(37.w),
+            // 连接状态指示器
+            Icon(
+              Icons.circle,
+              size: 12.w,
+              color: isWallConnected ? Colors.green : Colors.red,
+            ).paddingLeft(8.w),
             const Spacer(),
             Toggle(
               firstIcon: ImageWidget.svg(
-                AssetsSvgs.openSvg,
+                AssetsSvgs.closeSvg,
                 width: 90.w,
                 height: 30.h,
               ),
               secondIcon: ImageWidget.svg(
-                AssetsSvgs.closeSvg,
+                AssetsSvgs.openSvg,
                 width: 90.w,
                 height: 30.h,
               ),
@@ -158,15 +170,21 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
           ].toRow().paddingTop(8.h),
            <Widget>[
             TextWidget.label('桌面', fontSize: 28.sp).paddingLeft(37.w),
+            // 连接状态指示器
+            Icon(
+              Icons.circle,
+              size: 12.w,
+              color: isDeskConnected ? Colors.green : Colors.red,
+            ).paddingLeft(8.w),
             const Spacer(),
             Toggle(
               firstIcon: ImageWidget.svg(
-                AssetsSvgs.openSvg,
+                AssetsSvgs.closeSvg,
                 width: 90.w,
                 height: 30.h,
               ),
               secondIcon: ImageWidget.svg(
-                AssetsSvgs.closeSvg,
+                AssetsSvgs.openSvg,
                 width: 90.w,
                 height: 30.h,
               ),
@@ -177,6 +195,44 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
         ]
             .toColumn();
       },
+    );
+  }
+  
+  /// 构建连接状态提示
+  Widget _buildConnectionStatus(bool isWallConnected, bool isDeskConnected) {
+    if (isWallConnected && isDeskConnected) {
+      return const SizedBox.shrink();
+    }
+    
+    String message;
+    if (!isWallConnected && !isDeskConnected) {
+      message = '墙面和桌面服务器均未连接';
+    } else if (!isWallConnected) {
+      message = '墙面服务器未连接';
+    } else {
+      message = '桌面服务器未连接';
+    }
+    
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 40.w),
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8.r),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20.w),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: Colors.orange, fontSize: 24.sp),
+            ),
+          ),
+        ],
+      ),
     );
   }
   Widget _buildVolume() {
@@ -199,6 +255,7 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
               value: controller.wallVolume,
               width: 190.w,
               onChanged: controller.setWallVolume,
+              onChangeEnd: controller.commitWallVolume,
               activeColor: CustomAppColors.primary,
               inactiveColor: CustomAppColors.border,
               showValueOnLongPress: true,
@@ -211,6 +268,7 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
               value: controller.deskVolume,
               width: 190.w,
               onChanged: controller.setDeskVolume,
+              onChangeEnd: controller.commitDeskVolume,
               activeColor: CustomAppColors.primary,
               inactiveColor: CustomAppColors.border,
               showValueOnLongPress: true,

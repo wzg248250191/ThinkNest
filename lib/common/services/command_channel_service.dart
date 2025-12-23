@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:get/get.dart';
 
+import '../proto/Common.pb.dart' as game_msg;
+import '../proto/Common.pbenum.dart' as game_msg_enum;
 import '../values/constants.dart';
 
 /// 指令通道状态
@@ -66,6 +68,12 @@ class CommandChannelService extends GetxService {
 
   Stream<CommandMessage> get inboundStream => _inboundController.stream;
 
+  final StreamController<game_msg.MESSAGE> _protoInboundController =
+      StreamController<game_msg.MESSAGE>.broadcast();
+
+  Stream<game_msg.MESSAGE> get inboundProtoStream =>
+      _protoInboundController.stream;
+
   WebSocket? _socket;
   StreamSubscription? _socketSub;
   Timer? _heartbeatTimer;
@@ -74,11 +82,15 @@ class CommandChannelService extends GetxService {
       .replace(scheme: 'wss', path: '/ws/command');
   bool _manualClose = false;
   int _reconnectAttempt = 0;
+  bool _useProtobuf = false;
 
   /// 初始化指令通道服务（可选设置默认连接地址）
-  void init({Uri? endpoint}) {
+  void init({Uri? endpoint, bool? useProtobuf}) {
     if (endpoint != null) {
       _endpoint = endpoint;
+    }
+    if (useProtobuf != null) {
+      _useProtobuf = useProtobuf;
     }
   }
 
@@ -88,6 +100,12 @@ class CommandChannelService extends GetxService {
   /// 设置默认连接地址（下次 connect 将使用此地址）
   void setEndpoint(Uri endpoint) {
     _endpoint = endpoint;
+  }
+
+  bool get useProtobuf => _useProtobuf;
+
+  void setUseProtobuf(bool value) {
+    _useProtobuf = value;
   }
 
   /// 确保已连接（未连接则发起连接）
@@ -155,6 +173,17 @@ class CommandChannelService extends GetxService {
     socket.add(jsonEncode(message.toJson()));
   }
 
+  Future<void> sendProto(game_msg.MESSAGE message) async {
+    if (status.value != CommandChannelStatus.connected || _socket == null) {
+      await ensureConnected();
+    }
+    final WebSocket? socket = _socket;
+    if (socket == null) {
+      return;
+    }
+    socket.add(message.writeToBuffer());
+  }
+
   /// 清理资源
   Future<void> _disposeSocket() async {
     _heartbeatTimer?.cancel();
@@ -170,6 +199,11 @@ class CommandChannelService extends GetxService {
   /// 处理服务器推送消息
   void _handleInbound(dynamic raw) {
     try {
+      if (raw is List<int>) {
+        final game_msg.MESSAGE msg = game_msg.MESSAGE.fromBuffer(raw);
+        _protoInboundController.add(msg);
+        return;
+      }
       if (raw is String) {
         final dynamic decoded = jsonDecode(raw);
         if (decoded is Map<String, dynamic>) {
@@ -203,7 +237,18 @@ class CommandChannelService extends GetxService {
         return;
       }
       try {
-        socket.add(jsonEncode(<String, dynamic>{'type': 'ping'}));
+        if (_useProtobuf) {
+          final game_msg.MESSAGE msg = game_msg.MESSAGE(
+            mSGtype: game_msg_enum.MSGTYPE.HeartEcho,
+            echoData: game_msg.EchoData(
+              clientEnd: game_msg_enum.CLIENTEND.Desktop,
+              echomsg: 'ping',
+            ),
+          );
+          socket.add(msg.writeToBuffer());
+        } else {
+          socket.add(jsonEncode(<String, dynamic>{'type': 'ping'}));
+        }
       } catch (_) {}
     });
   }
@@ -238,6 +283,7 @@ class CommandChannelService extends GetxService {
     unawaited(_socket?.close());
     _socket = null;
     unawaited(_inboundController.close());
+    unawaited(_protoInboundController.close());
     super.onClose();
   }
 }

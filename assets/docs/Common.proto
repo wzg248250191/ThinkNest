@@ -1,0 +1,159 @@
+syntax = "proto3";
+package GameMsg; 
+
+
+/*---------------数据包根据客户端的种类 --------------------*/
+enum MSGTYPE
+{
+/*---------------iPAD --------------------*/
+ ServerRequest=0;
+ UnityRequest=1;
+ ServerResponse=2;
+ UnityResponse=3;
+ HeartEcho=4;
+ Status=5;
+}
+enum UNITYMSGTYPE
+{
+ Operation=0;
+ Data=1;
+}
+
+
+enum SERVERBEHAVIOUR
+{
+Application=0;
+Volume=1;
+}
+
+
+
+/*--------------- 与方果控制台交换的包 --------------------*/
+message ServerMessage{
+
+ SERVERBEHAVIOUR ServerBehaviour=1;
+ int32 VolumeValue=2;
+ string GameName=3;  
+ bool On=4;
+}
+
+/*--------------- 与Unity交互的数据包 --------------------*/
+/*----发送给Unity MSGTYPE=UNITYREQUEST -------------------*/
+/*----接受Unity MSGTYPE=UNITYRESPONSE --------------------*/
+/*-------描述--------说明---------行为---------说明-------*/
+/*-------A--------全局---------Play---------开始---------*/
+/*-------L--------左面---------Pause---------暂停--------*/
+/*-------R--------右面---------Open---------打开---------*/
+/*-------LR--------左右--------Close---------关闭-------*/
+/*-------M--------中间---------Restart---------重启------*/
+/*-------D--------桌面---------Assign---------分配-------*/
+/*-------D--------桌面---------Assign---------分配-------*/
+/*-----------------------------End-----------------------*/
+
+
+message  UnityMessage {
+  UNITYMSGTYPE UnityMSGtype=1;
+  UnityData UnityData=2;
+  string Operation=3;
+
+}
+
+/*-------D--------桌面---------Assign---------分配-------*/
+/*-------分配给Unity当前班级的学生信息-------*/
+/*-------D--------桌面-----ClassGeneral-------数据-------*/
+/*-------告诉iPad当前班级需要展现的总体信息，并负责总体统计-------*/
+/*-------D--------桌面-----SinglePerson-------数据-------*/
+/*-------告诉iPad个人的数据，有两个block第一个为个人总体信息，第二个为具体个人数据，Unity客户端做平均运算-------*/
+/*-------D--------桌面-----Default-------数据-------*/
+/*-------未知的数据，需要iPad端解析-------*/
+message UnityData{
+
+string Specifying=1;
+repeated Person Persons=2;
+repeated Block  Blocks=3;
+string Default=4;
+
+}
+
+/*--------------- Person --------------------*/
+
+message Person
+{
+	string Name= 1;
+	int32 Num=2;
+	string URL=3;
+    repeated  Ability Abilities=4;	
+}
+
+
+message Ability{
+
+string Abilityname=1;
+float Value=2;
+}
+
+
+/*-------默认每个blockcolumn,第一个为学生的Num,防止重名，数据匹配错误-------*/
+message Block{
+
+string Name=1;
+int32 Index=2;
+repeated BlockColumn BlockColumns=3;
+repeated BlockColumnData BlockColumnDatas=4;
+
+}
+message  BlockColumn{
+
+string Name=1;
+string Type=2;
+string Sort=3;
+bool  Show=4;
+string Suffix=5;
+string CountMode=6;
+int32 CountColumDataByIndex=7;
+}
+
+message  BlockColumnData{
+
+  string ColumnData=1;
+  string Separator=2;
+}
+/*--------------- Heart包暂时没有消息体 ------------------*/
+message  MESSAGE{
+ MSGTYPE MSGtype=1;
+ UnityMessage UnityMessage=2;
+ ServerMessage ServerMessage=3;
+ MSGStatus MSGstatus=4;
+ EchoData EchoData=5;
+}
+
+
+
+enum OperationStatus{
+NullUnityClient=0;
+NulliPadClient=1;
+NullCourse=2;
+CoursePlayisRunning=3;
+DataformatterError=4;
+DataTransferError=5;
+
+}
+
+message MSGStatus{
+OperationStatus operationstatus=1;
+int32 SQID=2;
+string Info=3;
+}
+
+message  EchoData{
+
+CLIENTEND ClientEnd=1;
+string  Echomsg=2;
+}
+
+enum  CLIENTEND
+{
+WALL=0;
+Desktop=1;
+}
+

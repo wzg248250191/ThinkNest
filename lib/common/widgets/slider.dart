@@ -216,16 +216,14 @@ class _SliderWidgetState extends State<SliderWidget> {
     return widget.thumbRadius + ratio * trackWidth;
   }
 
-  void _updateValueFromPosition({
+  int _updateValueFromPosition({
     required Offset localPosition,
     required double trackWidth,
   }) {
     final int next =
         _valueFromLocalPosition(localPosition: localPosition, trackWidth: trackWidth);
-    if (widget.onChanged == null) {
-      return;
-    }
     widget.onChanged?.call(next);
+    return next;
   }
 
   @override
@@ -306,13 +304,18 @@ class _SliderWidgetState extends State<SliderWidget> {
                       )) {
                     return;
                   }
-                  _updateValueFromPosition(
+                  final int next = _updateValueFromPosition(
                     localPosition: d.localPosition,
                     trackWidth: trackWidth,
                   );
+                  widget.onChangeEnd?.call(_clampValue(next));
+                  final double nextThumbCenterX = _thumbCenterXForValue(
+                    value: next,
+                    trackWidth: trackWidth,
+                  );
                   _updateOverlay(
-                    thumbCenterX: thumbCenterX,
-                    value: clamped,
+                    thumbCenterX: nextThumbCenterX,
+                    value: _clampValue(next),
                   );
                 }
               : null,

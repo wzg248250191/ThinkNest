@@ -10,6 +10,7 @@
 analyzer:
   errors:
     unnecessary_library_name: ignore
+    avoid_print: ignore
 include: package:flutter_lints/flutter.yaml
 
 linter:

@@ -5,6 +5,7 @@ class DeviceInfoConfig {
   final String openCmd;
   final String closeCmd;
   final String queryCmd;
+  final int commandBase;
 
   const DeviceInfoConfig({
     this.enabled = true,
@@ -13,6 +14,7 @@ class DeviceInfoConfig {
     this.openCmd = '',
     this.closeCmd = '',
     this.queryCmd = '',
+    this.commandBase = 16,
   });
 
   DeviceInfoConfig copyWith({
@@ -22,6 +24,7 @@ class DeviceInfoConfig {
     String? openCmd,
     String? closeCmd,
     String? queryCmd,
+    int? commandBase,
   }) {
     return DeviceInfoConfig(
       enabled: enabled ?? this.enabled,
@@ -30,6 +33,7 @@ class DeviceInfoConfig {
       openCmd: openCmd ?? this.openCmd,
       closeCmd: closeCmd ?? this.closeCmd,
       queryCmd: queryCmd ?? this.queryCmd,
+      commandBase: _normalizeCommandBase(commandBase ?? this.commandBase),
     );
   }
 
@@ -41,6 +45,7 @@ class DeviceInfoConfig {
       'openCmd': openCmd,
       'closeCmd': closeCmd,
       'queryCmd': queryCmd,
+      'commandBase': commandBase,
     };
   }
 
@@ -51,6 +56,7 @@ class DeviceInfoConfig {
     final dynamic openCmd = json['openCmd'];
     final dynamic closeCmd = json['closeCmd'];
     final dynamic queryCmd = json['queryCmd'];
+    final dynamic commandBase = json['commandBase'];
 
     return DeviceInfoConfig(
       enabled: enabled is bool ? enabled : true,
@@ -59,7 +65,20 @@ class DeviceInfoConfig {
       openCmd: openCmd is String ? openCmd : '',
       closeCmd: closeCmd is String ? closeCmd : '',
       queryCmd: queryCmd is String ? queryCmd : '',
+      commandBase: _normalizeCommandBase(commandBase),
     );
   }
-}
 
+  static int _normalizeCommandBase(dynamic value) {
+    if (value is int) {
+      return value == 2 ? 2 : 16;
+    }
+    if (value is String) {
+      final int? parsed = int.tryParse(value);
+      if (parsed != null) {
+        return parsed == 2 ? 2 : 16;
+      }
+    }
+    return 16;
+  }
+}

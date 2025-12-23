@@ -12,6 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   #状态管理
   get: ^4.7.3
+  dropdown_button2: 2.3.9
   #获取包信息
   package_info_plus: ^9.0.0
   # 本地存储

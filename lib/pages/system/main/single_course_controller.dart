@@ -23,6 +23,8 @@ class SingleCourseController extends GetxController {
   }
 
   StreamSubscription<CommandMessage>? _sub;
+  Worker? _wallConnectionWorker;
+  Worker? _deskConnectionWorker;
 
   String? courseId;
 
@@ -45,6 +47,27 @@ class SingleCourseController extends GetxController {
   
   /// 获取桌面服务器连接IP
   String? get deskServerIp => _socketService.connectedDesktopServerIp.value;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _wallConnectionWorker = ever<SocketState>(
+      _socketService.wallConnectionState,
+      (_) {
+        if (courseId != null) {
+          update(['course_control_toggle']);
+        }
+      },
+    );
+    _deskConnectionWorker = ever<SocketState>(
+      _socketService.desktopConnectionState,
+      (_) {
+        if (courseId != null) {
+          update(['course_control_toggle']);
+        }
+      },
+    );
+  }
 
   /// 打开课程详情并初始化状态（用于覆盖层展示）
   /// 
@@ -285,6 +308,10 @@ class SingleCourseController extends GetxController {
   void onClose() {
     _sub?.cancel();
     _sub = null;
+    _wallConnectionWorker?.dispose();
+    _wallConnectionWorker = null;
+    _deskConnectionWorker?.dispose();
+    _deskConnectionWorker = null;
     super.onClose();
   }
 }

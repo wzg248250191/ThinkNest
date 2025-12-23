@@ -27,6 +27,7 @@ class DeviceConfigView extends GetView<IntegrationController> {
             return DeviceInfoItem(
               title: title,
               enabled: cfg.enabled,
+              commandBase: cfg.commandBase,
               ip: cfg.ip,
               port: cfg.port,
               openCmd: cfg.openCmd,

@@ -11,6 +11,7 @@ class DeviceInfoItem extends StatefulWidget {
     super.key,
     required this.title,
     this.enabled = true,
+    this.commandBase = 16,
     this.ip,
     this.port,
     this.openCmd,
@@ -21,6 +22,7 @@ class DeviceInfoItem extends StatefulWidget {
   
   final String title;//名字
   final bool enabled;//是否启用
+  final int commandBase;//命令进制（2 或 16）
   final String? ip;//ip地址
   final String? port;//端口号
   final String? openCmd;//打开指令
@@ -34,6 +36,11 @@ class DeviceInfoItem extends StatefulWidget {
 
 class _DeviceInfoItemState extends State<DeviceInfoItem> {
   late bool _enabled;
+  late int _commandBase;
+  final List<KeyValueModel<String>> _commandBaseOptions = <KeyValueModel<String>>[
+    KeyValueModel<String>(key: '2', value: '2进制'),
+    KeyValueModel<String>(key: '16', value: '16进制'),
+  ];
   late final TextEditingController _ipController;
   late final TextEditingController _portController;
   late final TextEditingController _openCmdController;
@@ -47,6 +54,7 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
   void initState() {
     super.initState();
     _enabled = widget.enabled;
+    _commandBase = widget.commandBase == 2 ? 2 : 16;
     _ipController = TextEditingController(text: widget.ip ?? '');
     _portController = TextEditingController(text: widget.port ?? '');
     _openCmdController = TextEditingController(text: widget.openCmd ?? '');
@@ -64,6 +72,24 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
   void _onEnabledChanged(bool value) {
     setState(() {
       _enabled = value;
+    });
+    _scheduleEmit();
+  }
+
+  void _onCommandBaseChanged(KeyValueModel? value) {
+    if (value == null) {
+      return;
+    }
+    final int? parsed = int.tryParse(value.key);
+    if (parsed == null) {
+      return;
+    }
+    final int next = parsed == 2 ? 2 : 16;
+    if (next == _commandBase) {
+      return;
+    }
+    setState(() {
+      _commandBase = next;
     });
     _scheduleEmit();
   }
@@ -99,6 +125,7 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
       openCmd: _openCmdController.text,
       closeCmd: _closeCmdController.text,
       queryCmd: _queryController.text,
+      commandBase: _commandBase,
     );
   }
 
@@ -111,8 +138,10 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
     final nextOpenCmd = widget.openCmd ?? '';
     final nextCloseCmd = widget.closeCmd ?? '';
     final nextQueryCmd = widget.queryCmd ?? '';
+    final int nextCommandBase = widget.commandBase == 2 ? 2 : 16;
 
     final bool enabledChanged = widget.enabled != _enabled;
+    final bool commandBaseChanged = nextCommandBase != _commandBase;
     final bool ipChanged = nextIp != _ipController.text;
     final bool portChanged = nextPort != _portController.text;
     final bool openCmdChanged = nextOpenCmd != _openCmdController.text;
@@ -120,6 +149,7 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
     final bool queryChanged = nextQueryCmd != _queryController.text;
 
     if (!enabledChanged &&
+        !commandBaseChanged &&
         !ipChanged &&
         !portChanged &&
         !openCmdChanged &&
@@ -129,9 +159,14 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
     }
 
     _syncing = true;
-    if (enabledChanged) {
+    if (enabledChanged || commandBaseChanged) {
       setState(() {
-        _enabled = widget.enabled;
+        if (enabledChanged) {
+          _enabled = widget.enabled;
+        }
+        if (commandBaseChanged) {
+          _commandBase = nextCommandBase;
+        }
       });
     }
     if (ipChanged) {
@@ -195,8 +230,22 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
   }
 
   Widget _buildView() {
+    final KeyValueModel<String> selectedCommandBase = _commandBaseOptions.firstWhere(
+      (e) => int.tryParse(e.key) == _commandBase,
+      orElse: () => _commandBaseOptions.last,
+    );
     final Widget header = <Widget>[
       TextWidget.label(widget.title, fontSize: 36.sp, color: Colors.red), //名字
+      
+      DropdownWidget(
+        items: _commandBaseOptions,
+        selectedValue: selectedCommandBase,
+        onChanged: _onCommandBaseChanged,
+        fontSize: 24.sp,
+        buttonHeight: 44.h,
+        itemHeight: 40.h,
+      ).width(180.w),
+
       Toggle(
         firstIcon: ImageWidget.svg(AssetsSvgs.closeSvg),
         secondIcon: ImageWidget.svg(AssetsSvgs.openSvg),

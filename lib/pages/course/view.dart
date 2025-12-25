@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 
-import 'controller.dart';
-import 'widgets/course_type.dart';
-import 'widgets/course.dart';
-import 'widgets/course_nav_widget.dart';
+import '../index.dart';
+
+
 import '../../common/index.dart';
-import '../system/main/controller.dart';
+import 'widgets/floating_course_widget.dart';
+
 
 class CoursePage extends GetView<CourseController> {
   const CoursePage({super.key});
@@ -19,7 +19,15 @@ class CoursePage extends GetView<CourseController> {
       id: "course",
       builder: (_) {
         return Scaffold(
-          body: _buildView(),
+          body: Stack(
+            children: [
+              _buildView(),
+              
+              // 悬浮窗：显示当前正在运行的课程
+              // 移至 CoursePage 内部，确保只在课程列表页显示
+              const FloatingCourseWidget(),
+            ],
+          ),
         );
       },
     );

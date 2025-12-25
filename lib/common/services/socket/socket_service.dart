@@ -62,6 +62,11 @@ class SocketService extends GetxService {
   
   /// 所有消息接收流控制器（合并）
   final _allMessageController = StreamController<(ServerType, MESSAGE)>.broadcast();
+
+  OperationStatus? _lastWallStatusShown;
+  int _lastWallStatusShownMs = 0;
+  OperationStatus? _lastDesktopStatusShown;
+  int _lastDesktopStatusShownMs = 0;
   
   /// 墙面服务器消息接收流
   Stream<MESSAGE> get wallMessageStream => _wallMessageController.stream;
@@ -409,32 +414,65 @@ class SocketService extends GetxService {
   /// 处理状态消息
   void _handleStatusMessage(ServerType serverType, MSGStatus status) {
     print('收到${serverType.displayName}状态消息: ${status.operationstatus}, 信息: ${status.info}');
-    
-    switch (status.operationstatus) {
-      case OperationStatus.NullUnityClient:
-        Get.snackbar('${serverType.displayName}', 'Unity客户端未连接');
-        break;
-      case OperationStatus.NulliPadClient:
-        Get.snackbar('${serverType.displayName}', 'iPad客户端未连接');
-        break;
-      case OperationStatus.NullCourse:
-        Get.snackbar('${serverType.displayName}', '课程不存在');
-        break;
-      case OperationStatus.CoursePlayisRunning:
-        Get.snackbar('${serverType.displayName}', '课程正在运行中');
-        break;
-      case OperationStatus.DataformatterError:
-        Get.snackbar('${serverType.displayName}', '数据格式错误');
-        break;
-      case OperationStatus.DataTransferError:
-        Get.snackbar('${serverType.displayName}', '数据传输错误');
-        break;
+
+    final op = status.operationstatus;
+    if (!_shouldShowStatusSnackbar(serverType, op)) {
+      return;
     }
+
+    // 状态消息现在由课程详情界面统一处理，此处不再全局弹窗
+    // switch (status.operationstatus) {
+    //   case OperationStatus.NullUnityClient:
+    //     Get.snackbar('${serverType.displayName}', 'Unity客户端未连接');
+    //     break;
+    //   case OperationStatus.NulliPadClient:
+    //     Get.snackbar('${serverType.displayName}', 'iPad客户端未连接');
+    //     break;
+    //   case OperationStatus.NullCourse:
+    //     Get.snackbar('${serverType.displayName}', '课程不存在');
+    //     break;
+    //   case OperationStatus.CoursePlayisRunning:
+    //     Get.snackbar('${serverType.displayName}', '课程正在运行中');
+    //     break;
+    //   case OperationStatus.DataformatterError:
+    //     Get.snackbar('${serverType.displayName}', '数据格式错误');
+    //     break;
+    //   case OperationStatus.DataTransferError:
+    //     Get.snackbar('${serverType.displayName}', '数据传输错误');
+    //     break;
+    // }
+  }
+
+  bool _shouldShowStatusSnackbar(ServerType serverType, OperationStatus status) {
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+
+    if (serverType == ServerType.wall) {
+      if (_lastWallStatusShown == status && (nowMs - _lastWallStatusShownMs) < 1500) {
+        return false;
+      }
+      if ((nowMs - _lastWallStatusShownMs) < 800) {
+        return false;
+      }
+      _lastWallStatusShown = status;
+      _lastWallStatusShownMs = nowMs;
+      return true;
+    }
+
+    if (_lastDesktopStatusShown == status && (nowMs - _lastDesktopStatusShownMs) < 1500) {
+      return false;
+    }
+    if ((nowMs - _lastDesktopStatusShownMs) < 800) {
+      return false;
+    }
+    _lastDesktopStatusShown = status;
+    _lastDesktopStatusShownMs = nowMs;
+    return true;
   }
 
   /// 处理Unity响应
   void _handleUnityResponse(ServerType serverType, UnityMessage unityMessage) {
     print('收到${serverType.displayName}的Unity响应: ${unityMessage.unityMSGtype}');
+    
   }
 
   /// 处理服务器响应

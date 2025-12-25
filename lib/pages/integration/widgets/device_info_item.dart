@@ -246,7 +246,7 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
         itemHeight: 40.h,
       ).width(180.w),
 
-      Toggle(
+      ToggleWidget(
         firstIcon: ImageWidget.svg(AssetsSvgs.closeSvg),
         secondIcon: ImageWidget.svg(AssetsSvgs.openSvg),
         width: 90.w,

@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../common/index.dart';
 import '../../index.dart';
 
 class MainController extends GetxController {
@@ -64,24 +66,58 @@ class MainController extends GetxController {
 
   /// 打开全屏课程详情覆盖层，并保证停留在课程 tab
   void openCourseController(String name) {
+    // 获取 Handler 实例（数据源）
+    final handler = Get.find<PcCourseMessageHandler>();
+    final activeId = handler.currentCourseId.value;
+    final isRunning = handler.wallCourseEnabled.value || handler.deskCourseEnabled.value;
+
+    // 互斥拦截逻辑
+    // 1. 如果当前有课程在运行
+    // 2. 且点击的课程不是当前运行的课程
+    if (isRunning && activeId != null && activeId != name) {
+      ToastUtils.show(
+        '请先结束当前课程：\n$activeId',
+        width: 350.w,
+        height: 240.h,
+      );
+      return;
+    }
+
+    // 如果当前已经是打开状态，且是同一个课程，直接返回
+    if (showCourseDetail && Get.find<SingleCourseController>().courseId == name) {
+      return;
+    }
+    
     showCourseDetail = true;
     if (currentIndex != 0) {
       currentIndex = 0;
       update(['content', 'navigation']);
     }
-    if (Get.isRegistered<SingleCourseController>()) {
-      unawaited(Get.find<SingleCourseController>().openCourse(name));
-    }
+    
+    // 1. 先更新 UI 显示 Overlay (此时 Controller 已常驻，UI 可以安全构建)
     update(['main_overlay']);
+
+    // 2. 延迟执行业务初始化，确保动画流畅
+    Future.delayed(const Duration(milliseconds: 200), () {
+      try {
+        // 直接调用常驻的 Controller
+        Get.find<SingleCourseController>().openCourse(name).catchError((e) {
+          print('Error opening course: $e');
+        });
+      } catch (e) {
+        print('Sync Error opening course: $e');
+      }
+    });
   }
 
   /// 关闭全屏课程详情覆盖层
   void closeCourseController() {
     showCourseDetail = false;
-    if (Get.isRegistered<SingleCourseController>()) {
-      unawaited(Get.find<SingleCourseController>().closeCourse());
-    }
+    
+    // 1. 仅更新 UI 隐藏 Overlay，不销毁业务逻辑
     update(['main_overlay']);
+    
+    // 不再执行任何销毁逻辑，保持 Controller 状态以便悬浮窗和下次进入使用
   }
 
   void onTap() {}

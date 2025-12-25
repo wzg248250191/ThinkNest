@@ -1,1 +1,2 @@
-static const logoPng = 'assets/icons/logo.png';
+static const startPlayPng = 'assets/icons/startPlay.png';
+static const stopPlayPng = 'assets/icons/stopPlay.png';

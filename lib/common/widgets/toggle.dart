@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// 点击后在两个图标之间切换的按钮组件
-class Toggle extends StatefulWidget {
+class ToggleWidget extends StatefulWidget {
   /// 第一种状态下展示的图标（value=false 时展示）
   final Widget firstIcon;
 
@@ -33,7 +33,7 @@ class Toggle extends StatefulWidget {
   /// 启用
   final bool enabled;
 
-  const Toggle({
+  const ToggleWidget({
     super.key,
     required this.firstIcon,
     required this.secondIcon,
@@ -49,15 +49,15 @@ class Toggle extends StatefulWidget {
 
   @override
   /// 创建可切换按钮状态
-  State<Toggle> createState() => _ToggleState();
+  State<ToggleWidget> createState() => _ToggleWidgetState();
 }
 
-class _ToggleState extends State<Toggle> {
+class _ToggleWidgetState extends State<ToggleWidget> {
   late bool _value = widget.value ?? false;
 
   @override
   /// 同步外部受控 value 到内部状态
-  void didUpdateWidget(covariant Toggle oldWidget) {
+  void didUpdateWidget(covariant ToggleWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.value != null && widget.value != oldWidget.value) {
       _value = widget.value!;

@@ -30,4 +30,7 @@ static const openSvg = 'assets/svgs/course/open.svg';
 static const volumeSvg = 'assets/svgs/course/volume.svg';
 static const volumeBgSvg = 'assets/svgs/course/volumeBg.svg';
 static const muteSvg = 'assets/svgs/course/mute.svg';
+
+static const startTestSvg = 'assets/svgs/course/start_test.svg';
+static const stopTestSvg = 'assets/svgs/course/stop_test.svg';
 }

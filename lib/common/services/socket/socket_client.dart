@@ -223,10 +223,10 @@ class SocketClient {
         _socket?.add(bytes);
         
         if (!silent) {
-          print('📤 数据已写入Socket，字节数: ${bytes.length}');
+         // print('📤 数据已写入Socket，字节数: ${bytes.length}');
           // 打印完整的十六进制数据（用于调试）
           if (bytes.length < 200) {
-            print('   HEX: ${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+           // print('   HEX: ${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
           }
         }
       }
@@ -244,7 +244,7 @@ class SocketClient {
         
         socket.flush().then((_) {
           if (!silent) {
-            print('📤 Socket缓冲区已刷新，数据已发送到网络');
+            //print('📤 Socket缓冲区已刷新，数据已发送到网络');
           }
         }).catchError((e) {
           print('❌ 刷新Socket缓冲区失败: $e');

@@ -57,6 +57,15 @@ class SingleCourseController extends GetxController {
           break;
         case OperationStatus.CoursePlayisRunning:
           msg = '课程正在运行中';
+          final ServerType? type = _handler.lastStatusServerType.value;
+          if (type == ServerType.wall) {
+            setWallEnabled(false, skipConfirm: true);
+          } else if (type == ServerType.desktop) {
+            setDeskEnabled(false, skipConfirm: true);
+          } else {
+            setWallEnabled(false, skipConfirm: true);
+            setDeskEnabled(false, skipConfirm: true);
+          }
           break;
         case OperationStatus.DataformatterError:
           msg = '数据格式错误';
@@ -178,12 +187,12 @@ class SingleCourseController extends GetxController {
     wallEnabled = false;
     deskEnabled = false;
     wholeEnabled = false;
-    
+
     _handler.detachCourse();
-    
+
     // 强制让出 UI 线程，确保状态清理不会阻塞 UI 隐藏动画
     await Future.delayed(Duration.zero);
-    
+
     update([
       'course_detail',
       'course_control_toggle',
@@ -240,16 +249,24 @@ class SingleCourseController extends GetxController {
     update(['course_control_toggle']);
   }
 
-  Future<void> setWallEnabled(bool enabled) async {
+  Future<void> setWallEnabled(bool enabled, {bool skipConfirm = false}) async {
     final String? id = courseId;
     if (id == null) {
       return;
     }
-
     bool success;
     if (enabled) {
       success = await _sender.openWallCourse(courseId: id);
     } else {
+      if (!skipConfirm) {
+        final bool confirmed = (await AlertDialog.show(
+              '您确定要关闭课程吗？',
+            )) ==
+            true;
+        if (!confirmed) {
+          return;
+        }
+      }
       success = await _sender.closeWallCourse(courseId: id);
     }
 
@@ -269,7 +286,7 @@ class SingleCourseController extends GetxController {
     update(['course_control_toggle']);
   }
 
-  Future<void> setDeskEnabled(bool enabled) async {
+  Future<void> setDeskEnabled(bool enabled, {bool skipConfirm = false}) async {
     final String? id = courseId;
     if (id == null) {
       return;
@@ -279,6 +296,15 @@ class SingleCourseController extends GetxController {
     if (enabled) {
       success = await _sender.openDeskCourse(courseId: id);
     } else {
+      if (!skipConfirm) {
+        final bool confirmed = (await AlertDialog.show(
+              '您确定要关闭课程吗？',
+            )) ==
+            true;
+        if (!confirmed) {
+          return;
+        }
+      }
       success = await _sender.closeDeskCourse(courseId: id);
     }
 

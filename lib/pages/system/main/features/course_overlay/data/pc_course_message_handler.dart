@@ -52,6 +52,7 @@ class PcCourseMessageHandler extends GetxService {
 
   final Rxn<OperationStatus> lastOperationStatus = Rxn<OperationStatus>();
   final RxnString lastStatusInfo = RxnString();
+  final Rxn<ServerType> lastStatusServerType = Rxn<ServerType>();
 
   StreamSubscription<(ServerType, MESSAGE)>? _sub;
 
@@ -141,6 +142,7 @@ class PcCourseMessageHandler extends GetxService {
     resetLocalState(enabled: false); 
     lastOperationStatus.value = null;
     lastStatusInfo.value = null;
+    lastStatusServerType.value = null;
   }
 
   void resetLocalState({
@@ -175,6 +177,7 @@ class PcCourseMessageHandler extends GetxService {
         lastOperationStatus.value = null; 
         lastOperationStatus.value = message.mSGstatus.operationstatus;
         lastStatusInfo.value = message.mSGstatus.info;
+        lastStatusServerType.value = serverType;
         break;
       case MSGTYPE.UnityResponse:
         if (message.hasUnityMessage()) {

@@ -16,8 +16,20 @@ enum ToastType {
 
 /// 全局通用的 Toast 提示工具类
 /// 使用 Get.dialog 实现，无需 Context，支持自定义样式
+/// 背景为全屏半透明,
 class ToastUtils {
-  
+  static Timer? _dismissTimer;
+
+  /// 隐藏当前 Toast/Loading 弹层
+  static void hide() {
+    _dismissTimer?.cancel();
+    _dismissTimer = null;
+
+    if (Get.isDialogOpen ?? false) {
+      Get.back();
+    }
+  }
+
   /// 显示 Toast
   /// [msg] 提示文本
   /// [type] 提示类型，默认为 info (感叹号)
@@ -35,10 +47,7 @@ class ToastUtils {
     double? height,
     double? fontSize,
   }) {
-    // 如果已有 Toast 显示，先关闭（防止堆叠）
-    if (Get.isDialogOpen ?? false) {
-      Get.back();
-    }
+    hide();
 
     Get.dialog(
       Center(
@@ -86,12 +95,78 @@ class ToastUtils {
     );
 
     // 定时关闭
-    Timer(duration, () {
+    _dismissTimer?.cancel();
+    _dismissTimer = Timer(duration, () {
       // 只有当前还在显示 Dialog 时才关闭
       if (Get.isDialogOpen ?? false) {
         Get.back();
       }
     });
+  }
+
+  /// 显示全屏 Loading（旋转圆圈），需手动调用 [hide] 关闭
+  /// [msg] 提示文本
+  /// [width] 容器宽度，不传则自适应
+  /// [height] 容器高度，不传则自适应
+  /// [fontSize] 字体大小，默认 28.sp
+  static void showLoading(
+    String msg, {
+    double? width,
+    double? height,
+    double? fontSize,
+  }) {
+    hide();
+
+    Get.dialog(
+      Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: width,
+            height: height,
+            padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 30.h),
+            decoration: BoxDecoration(
+              color: CustomAppColors.background,
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            constraints: BoxConstraints(
+              minWidth: 240.w,
+              maxWidth: 600.w,
+              minHeight: 180.h,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 64.sp,
+                  height: 64.sp,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 4.sp,
+                    backgroundColor: CustomAppColors.text.withOpacity(0.2),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(CustomAppColors.text),
+                  ),
+                ),
+                SizedBox(height: 20.h),
+                Text(
+                  msg,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: CustomAppColors.text,
+                    fontSize: fontSize ?? 28.sp,
+                    fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      barrierColor: Colors.black.withOpacity(0.3),
+      barrierDismissible: false,
+    );
   }
 
   static Widget _buildIcon(ToastType type) {
@@ -100,16 +175,16 @@ class ToastUtils {
 
     switch (type) {
       case ToastType.info:
-        iconData = Icons.error_outline_rounded; // 圆圈感叹号
+        iconData = Icons.error_outline; // 圆圈感叹号
         break;
       case ToastType.error:
-        iconData = Icons.highlight_off_rounded; // 圆圈 X
+        iconData = Icons.highlight_off; // 圆圈 X
         break;
       case ToastType.success:
-        iconData = Icons.check_circle_outline_rounded; // 圆圈 √
+        iconData = Icons.check_circle_outline; // 圆圈 √
         break;
       case ToastType.warning:
-        iconData = Icons.warning_amber_rounded; // 三角警告
+        iconData = Icons.warning_amber_outlined; // 三角警告
         break;
     }
 

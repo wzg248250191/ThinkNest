@@ -245,7 +245,9 @@ class SingleCourseController extends GetxController {
     } else {
       ToastUtils.show('桌面服务器未连接',type: ToastType.error);  
     }
-
+    if (enabled) {
+      ToastUtils.showLoading('课程正在打开中，请耐心等待');
+    }
     update(['course_control_toggle']);
   }
 
@@ -283,6 +285,9 @@ class SingleCourseController extends GetxController {
     if (deskEnabled == enabled) {
       wholeEnabled = enabled;
     }
+    if (enabled) {
+      ToastUtils.showLoading('课程正在打开中，请耐心等待');
+    }
     update(['course_control_toggle']);
   }
 
@@ -312,7 +317,9 @@ class SingleCourseController extends GetxController {
       ToastUtils.show('桌面服务器未连接',type: ToastType.error);
       return;
     }
-    
+    if (enabled) {
+      ToastUtils.showLoading('课程正在打开中，请耐心等待');
+    }
     // 关键修复：主动同步 Handler 状态
     if (!enabled) {
       _handler.deskCourseEnabled.value = enabled;

@@ -124,11 +124,11 @@ class SocketService extends GetxService {
         }
         break;
     }
-
-    if (!_clientManager.isAnyConnected) {
+    //当所有服务器连接都断开时，重置课程列表相关的 UI 状态 。
+    /*if (!_clientManager.isAnyConnected) {
       isCourseListLoading.value = true;
       courseList.clear();
-    }
+    }*/
   }
 
   /// 分发指定服务器的消息到对应 stream，并触发内部消息处理
@@ -160,7 +160,7 @@ class SocketService extends GetxService {
     
     _clientManager.onError = (serverType, error) {
       print('${serverType.displayName}错误: $error');
-      Get.snackbar('${serverType.displayName}错误', error);
+      //Get.snackbar('${serverType.displayName}错误', error);
     };
   }
   

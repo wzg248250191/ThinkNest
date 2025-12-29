@@ -167,10 +167,8 @@ class PcCourseMessageHandler extends GetxService {
     if (courseId == null) {
       return;
     }
-
     switch (message.mSGtype) {
       case MSGTYPE.ServerResponse:
-        _handleServerResponse(serverType, message.serverMessage, courseId);
         break;
       case MSGTYPE.Status:
         // 强制触发更新，即使状态相同
@@ -200,6 +198,7 @@ class PcCourseMessageHandler extends GetxService {
     }
   }
 
+///桌面没有操作符
   void handleDeskOperation(UnityMessage msg) {
     if (msg.operation == CourseNetOperationTable.desktopClassGeneral.code) {}
   }
@@ -213,64 +212,21 @@ class PcCourseMessageHandler extends GetxService {
     else if (msg.operation == CourseNetOperationTable.wallSingleControl.code) {
       isWallDoubleControl.value = false;
     }
-    else if (msg.operation == CourseNetOperationTable.wallClassGeneral.code) {
-      _applyCourseEnabled(ServerType.wall, true);
+    else if (msg.operation == CourseNetOperationTable.wallClassGeneral.code) {    
+       wallCourseEnabled.value = true;
+       ToastUtils.hide();
     }
   }
 
   void handleDeskData(UnityMessage msg) {
     if (msg.hasUnityData()) {
       final data = msg.unityData;
-      if (data.specifying == CourseNetOperationTable.desktopClassGeneral.code) {
-        _applyCourseEnabled(ServerType.desktop, true);
+      if (data.specifying == CourseNetOperationTable.desktopClassGeneral.code) {      
+         deskCourseEnabled.value = true;
+          ToastUtils.hide();
       }
     }
-  }
-
-  void _handleServerResponse(
-    ServerType serverType,
-    ServerMessage serverMessage,
-    String courseId,
-  ) {
-    if (serverMessage.gameName != courseId) {
-      return;
-    }
-
-    switch (serverMessage.serverBehaviour) {
-      case SERVERBEHAVIOUR.Application:
-        _applyCourseEnabled(serverType, serverMessage.on);
-        break;
-      case SERVERBEHAVIOUR.Volume:
-        _applyVolume(serverType, serverMessage.volumeValue);
-        break;
-      default:
-        break;
-    }
-  }
-
-  void _applyCourseEnabled(ServerType serverType, bool enabled) {
-    switch (serverType) {
-      case ServerType.wall:
-        wallCourseEnabled.value = enabled;
-        break;
-      case ServerType.desktop:
-        deskCourseEnabled.value = enabled;
-        break;
-    }
-  }
-
-  void _applyVolume(ServerType serverType, int volume) {
-    final int v = volume.clamp(0, 100);
-    switch (serverType) {
-      case ServerType.wall:
-        wallVolume.value = v;
-        break;
-      case ServerType.desktop:
-        deskVolume.value = v;
-        break;
-    }
-  }
-
+  }  
   @override
   void onClose() {
     detachCourse();

@@ -53,6 +53,9 @@ class SocketService extends GetxService {
   
   /// 当前连接的桌面服务器IP
   final RxnString connectedDesktopServerIp = RxnString();
+
+  final RxBool isCourseListLoading = true.obs;
+  final RxList<String> courseList = <String>[].obs;
   
   /// 墙面服务器消息接收流控制器
   final _wallMessageController = StreamController<MESSAGE>.broadcast();
@@ -120,6 +123,11 @@ class SocketService extends GetxService {
           connectedDesktopServerIp.value = null;
         }
         break;
+    }
+
+    if (!_clientManager.isAnyConnected) {
+      isCourseListLoading.value = true;
+      courseList.clear();
     }
   }
 
@@ -208,6 +216,7 @@ class SocketService extends GetxService {
           connectedDesktopServerIp.value = host;
           break;
       }
+      requestCourseList(serverType);
     }
     return success;
   }
@@ -332,6 +341,15 @@ class SocketService extends GetxService {
 
   // ==================== 便捷方法 ====================
 
+  /// 向指定服务器发送“获取课程清单”的请求，并将本地清单状态重置为加载中
+  void requestCourseList(ServerType serverType) {
+    isCourseListLoading.value = true;
+    courseList.clear();
+
+    final serverMessage = ServerMessage()..serverBehaviour = SERVERBEHAVIOUR.CourseList;
+    sendToServer(serverType, serverMessage);
+  }
+
   /// 控制音量
   void setVolume(ServerType serverType, int volume) {
     final serverMessage = ServerMessage()
@@ -419,28 +437,6 @@ class SocketService extends GetxService {
     if (!_shouldShowStatusSnackbar(serverType, op)) {
       return;
     }
-
-    // 状态消息现在由课程详情界面统一处理，此处不再全局弹窗
-    // switch (status.operationstatus) {
-    //   case OperationStatus.NullUnityClient:
-    //     Get.snackbar('${serverType.displayName}', 'Unity客户端未连接');
-    //     break;
-    //   case OperationStatus.NulliPadClient:
-    //     Get.snackbar('${serverType.displayName}', 'iPad客户端未连接');
-    //     break;
-    //   case OperationStatus.NullCourse:
-    //     Get.snackbar('${serverType.displayName}', '课程不存在');
-    //     break;
-    //   case OperationStatus.CoursePlayisRunning:
-    //     Get.snackbar('${serverType.displayName}', '课程正在运行中');
-    //     break;
-    //   case OperationStatus.DataformatterError:
-    //     Get.snackbar('${serverType.displayName}', '数据格式错误');
-    //     break;
-    //   case OperationStatus.DataTransferError:
-    //     Get.snackbar('${serverType.displayName}', '数据传输错误');
-    //     break;
-    // }
   }
 
   bool _shouldShowStatusSnackbar(ServerType serverType, OperationStatus status) {
@@ -477,7 +473,16 @@ class SocketService extends GetxService {
 
   /// 处理服务器响应
   void _handleServerResponse(ServerType serverType, ServerMessage serverMessage) {
-    print('收到${serverType.displayName}响应: ${serverMessage.serverBehaviour}');
+    switch (serverMessage.serverBehaviour) {
+      case SERVERBEHAVIOUR.CourseList:
+        courseList.assignAll(serverMessage.courseList);
+        isCourseListLoading.value = false;
+        print('收到${serverType.displayName}课程清单: ${courseList.length}');
+        break;
+      default:
+        print('收到${serverType.displayName}响应: ${serverMessage.serverBehaviour}');
+        break;
+    }
   }
 
   /// 获取发现服务（用于高级用法）

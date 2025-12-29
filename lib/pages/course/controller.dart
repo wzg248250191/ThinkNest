@@ -8,6 +8,8 @@ import '../../common/index.dart';
 class CourseController extends GetxController {
   CourseController();
 
+  SocketService get _socketService => Get.find<SocketService>();
+
   /// 滚动控制器
   final ScrollController scrollController = ScrollController();
   
@@ -16,6 +18,11 @@ class CourseController extends GetxController {
   
   /// 每个分类对应的课程名称列表
   final Map<String, List<String>> typeCourseNames = {};
+
+  bool isCourseListLoading = true;
+
+  Worker? _courseListWorker;
+  Worker? _courseListLoadingWorker;
   
   /// 当前选中的分类索引
   int currentTypeIndex = 0;
@@ -51,30 +58,68 @@ class CourseController extends GetxController {
   @override
   void onReady() {
     super.onReady();
-    _initData();
+    _bindCourseList();
     scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshAllNavCenters();
-      // 🚀 页面渲染完成后，后台预缓存所有分类的首屏图片
-      _precacheAllSectionsInBackground();
+      if (!isCourseListLoading) {
+        _precacheAllSectionsInBackground();
+      }
     });
   }
 
   @override
   void onClose() {
+    _courseListWorker?.dispose();
+    _courseListLoadingWorker?.dispose();
     scrollController.removeListener(_onScroll);
     scrollController.dispose();
     super.onClose();
   }
 
-  void _initData() {
+  /// 绑定 SocketService 的课程清单状态，并驱动课程列表显示与加载态
+  void _bindCourseList() {
+    isCourseListLoading = _socketService.isCourseListLoading.value;
+    if (!isCourseListLoading) {
+      _applyCourseList(_socketService.courseList);
+    } else {
+      typeCourseNames.clear();
+      update(["course"]);
+    }
+
+    _courseListWorker = ever<List<String>>(_socketService.courseList, (list) {
+      if (_socketService.isCourseListLoading.value) {
+        return;
+      }
+      _applyCourseList(list);
+    });
+
+    _courseListLoadingWorker = ever<bool>(_socketService.isCourseListLoading, (loading) {
+      isCourseListLoading = loading;
+      if (loading) {
+        typeCourseNames.clear();
+        update(["course"]);
+        return;
+      }
+      _applyCourseList(_socketService.courseList);
+    });
+  }
+
+  /// 将服务端返回的课程清单映射到本地 coursesByName，并按分类生成展示列表
+  void _applyCourseList(List<String> serverCourseList) {
+    final allowed = serverCourseList.where(coursesByName.containsKey).toSet();
+
     for (final t in types) {
       typeCourseNames[t] = coursesByName.entries
-          .where((e) => e.value['type'] == t)
+          .where((e) => e.value['type'] == t && allowed.contains(e.key))
           .map((e) => e.key)
           .toList();
     }
+
     update(["course"]);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshAllNavCenters();
+    });
   }
 
   /// 滚动监听 - 更新当前分类高亮（带节流）

@@ -24,6 +24,7 @@ enum SERVERBEHAVIOUR
 {
 Application=0;
 Volume=1;
+CourseList=2;
 }
 
 
@@ -35,6 +36,7 @@ message ServerMessage{
  int32 VolumeValue=2;
  string GameName=3;  
  bool On=4;
+ repeated string CourseList=5;
 }
 
 /*--------------- 与Unity交互的数据包 --------------------*/

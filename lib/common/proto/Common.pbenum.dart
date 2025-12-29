@@ -55,10 +55,12 @@ class UNITYMSGTYPE extends $pb.ProtobufEnum {
 class SERVERBEHAVIOUR extends $pb.ProtobufEnum {
   static const SERVERBEHAVIOUR Application = SERVERBEHAVIOUR._(0, _omitEnumNames ? '' : 'Application');
   static const SERVERBEHAVIOUR Volume = SERVERBEHAVIOUR._(1, _omitEnumNames ? '' : 'Volume');
+  static const SERVERBEHAVIOUR CourseList = SERVERBEHAVIOUR._(2, _omitEnumNames ? '' : 'CourseList');
 
   static const $core.List<SERVERBEHAVIOUR> values = <SERVERBEHAVIOUR> [
     Application,
     Volume,
+    CourseList,
   ];
 
   static final $core.Map<$core.int, SERVERBEHAVIOUR> _byValue = $pb.ProtobufEnum.initByValue(values);

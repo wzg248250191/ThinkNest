@@ -24,6 +24,7 @@ class ServerMessage extends $pb.GeneratedMessage {
     $core.int? volumeValue,
     $core.String? gameName,
     $core.bool? on,
+    $core.Iterable<$core.String>? courseList,
   }) {
     final $result = create();
     if (serverBehaviour != null) {
@@ -38,6 +39,9 @@ class ServerMessage extends $pb.GeneratedMessage {
     if (on != null) {
       $result.on = on;
     }
+    if (courseList != null) {
+      $result.courseList.addAll(courseList);
+    }
     return $result;
   }
   ServerMessage._() : super();
@@ -49,6 +53,7 @@ class ServerMessage extends $pb.GeneratedMessage {
     ..a<$core.int>(2, _omitFieldNames ? '' : 'VolumeValue', $pb.PbFieldType.O3, protoName: 'VolumeValue')
     ..aOS(3, _omitFieldNames ? '' : 'GameName', protoName: 'GameName')
     ..aOB(4, _omitFieldNames ? '' : 'On', protoName: 'On')
+    ..pPS(5, _omitFieldNames ? '' : 'CourseList', protoName: 'CourseList')
     ..hasRequiredFields = false
   ;
 
@@ -108,6 +113,9 @@ class ServerMessage extends $pb.GeneratedMessage {
   $core.bool hasOn() => $_has(3);
   @$pb.TagNumber(4)
   void clearOn() => clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.List<$core.String> get courseList => $_getList(4);
 }
 
 class UnityMessage extends $pb.GeneratedMessage {

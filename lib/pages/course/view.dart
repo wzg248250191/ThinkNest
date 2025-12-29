@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 
-import '../index.dart';
-
-
 import '../../common/index.dart';
-import 'widgets/floating_course_widget.dart';
+import '../index.dart';
 
 
 class CoursePage extends GetView<CourseController> {
@@ -44,10 +41,32 @@ class CoursePage extends GetView<CourseController> {
 
   /// 使用 CustomScrollView + SliverGrid 构建课程列表
   Widget _buildCourseList() {
+    if (controller.isCourseListLoading) {
+      return _buildCourseListLoading();
+    }
     return CustomScrollView(
       controller: controller.scrollController,
       physics: const ClampingScrollPhysics(),
       slivers: _buildSlivers(),
+    );
+  }
+
+  /// 构建“等待服务器下发课程清单”的加载态内容
+  Widget _buildCourseListLoading() {
+    return <Widget>[
+      PulseDot(
+        size: 18.w,
+        color: CustomAppColors.primary,
+      ),
+      SizedBox(height: 18.h),
+      TextWidget.label(
+        '正在获取课程清单…',
+        fontSize: 28.sp,
+        color: CustomAppColors.subText,
+      ),
+    ].toColumn(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
     );
   }
 

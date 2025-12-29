@@ -51,6 +51,7 @@ const SERVERBEHAVIOUR$json = {
   '2': [
     {'1': 'Application', '2': 0},
     {'1': 'Volume', '2': 1},
+    {'1': 'CourseList', '2': 2},
   ],
 };
 
@@ -98,6 +99,7 @@ const ServerMessage$json = {
     {'1': 'VolumeValue', '3': 2, '4': 1, '5': 5, '10': 'VolumeValue'},
     {'1': 'GameName', '3': 3, '4': 1, '5': 9, '10': 'GameName'},
     {'1': 'On', '3': 4, '4': 1, '5': 8, '10': 'On'},
+    {'1': 'CourseList', '3': 5, '4': 3, '5': 9, '10': 'CourseList'},
   ],
 };
 
@@ -273,4 +275,3 @@ const EchoData$json = {
 final $typed_data.Uint8List echoDataDescriptor = $convert.base64Decode(
     'CghFY2hvRGF0YRIwCglDbGllbnRFbmQYASABKA4yEi5HYW1lTXNnLkNMSUVOVEVORFIJQ2xpZW'
     '50RW5kEhgKB0VjaG9tc2cYAiABKAlSB0VjaG9tc2c=');
-

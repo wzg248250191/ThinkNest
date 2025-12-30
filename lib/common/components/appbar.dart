@@ -38,8 +38,8 @@ class AppbarWidget extends StatelessWidget implements PreferredSizeWidget {
       foregroundColor: CustomAppColors.text,
       systemOverlayStyle: _buildSystemUiOverlayStyle(),
       leading: isBack
-          ? IconButton(
-              icon: Transform.rotate(
+          ? ButtonWidget.icon(
+              Transform.rotate(
                 angle: math.pi,
                 child: ImageWidget.svg(
                   AssetsSvgs.settingsArrowSvg,
@@ -48,7 +48,11 @@ class AppbarWidget extends StatelessWidget implements PreferredSizeWidget {
                   color: CustomAppColors.primary,
                 ),
               ),
-              onPressed: onTap,
+              width: 80.w,
+              height: 80.h,
+              borderRadius: 999,
+              enableRipple: false,
+              onTap: onTap,
             )
           : null,
       title: TextWidget(

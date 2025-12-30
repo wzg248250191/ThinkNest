@@ -78,6 +78,8 @@ class ButtonWidget extends StatefulWidget {
   /// 阴影
   final double? elevation;
 
+  final bool enableRipple;
+
   const ButtonWidget({
     super.key,
     this.variant = ButtonWidgetVariant.primary,
@@ -100,6 +102,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   }) : _width = width;
 
   /// raw
@@ -125,6 +128,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   }) : _width = width;
 
   /// 主要
@@ -149,6 +153,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   })  : _width = width,
         variant = ButtonWidgetVariant.primary;
 
@@ -174,6 +179,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   })  : _width = width,
         variant = ButtonWidgetVariant.secondary;
 
@@ -199,6 +205,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   })  : _width = width,
         variant = ButtonWidgetVariant.destructive;
 
@@ -224,6 +231,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   })  : _width = width,
         variant = ButtonWidgetVariant.outline;
 
@@ -249,6 +257,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   })  : _width = width,
         variant = ButtonWidgetVariant.ghost;
 
@@ -274,6 +283,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   })  : _width = width,
         variant = ButtonWidgetVariant.link;
 
@@ -299,6 +309,7 @@ class ButtonWidget extends StatefulWidget {
     this.mainAxisAlignment,
     this.mainAxisSize,
     this.elevation,
+    this.enableRipple = true,
   })  : _width = width,
         variant = ButtonWidgetVariant.icon;
 
@@ -439,6 +450,9 @@ class _ButtonWidgetState extends State<ButtonWidget> {
 
   bool _ripple(bool enbaled) {
     if (enbaled == false) {
+      return false;
+    }
+    if (widget.enableRipple == false) {
       return false;
     }
 

@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:get/get.dart';
 import 'package:think_nest/common/proto/Common.pb.dart';
+import 'package:think_nest/common/utils/storage.dart';
 import 'socket_client.dart';
 import 'socket_client_manager.dart';
 import 'udp_discovery_service.dart';
@@ -10,6 +11,7 @@ import 'udp_discovery_service.dart';
 /// Socket服务（GetX Service）
 /// 支持同时连接墙面服务器和桌面服务器
 class SocketService extends GetxService {
+  static const String _courseListCacheKey = 'course_list_cache_v1';
   /// Socket客户端管理器
   late SocketClientManager _clientManager;
   
@@ -477,6 +479,8 @@ class SocketService extends GetxService {
       case SERVERBEHAVIOUR.CourseList:
         courseList.assignAll(serverMessage.courseList);
         isCourseListLoading.value = false;
+        // 异步写入本地缓存，供下次启动/断网时快速回显课程列表，不阻塞当前 UI
+        unawaited(Storage().setList(_courseListCacheKey, serverMessage.courseList));
         print('收到${serverType.displayName}课程清单: ${courseList.length}');
         break;
       default:

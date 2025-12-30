@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
@@ -9,6 +10,9 @@ class CourseController extends GetxController {
   CourseController();
 
   SocketService get _socketService => Get.find<SocketService>();
+  Storage get _storage => Storage();
+
+  static const String _courseListCacheKey = 'course_list_cache_v1';
 
   /// 滚动控制器
   final ScrollController scrollController = ScrollController();
@@ -18,6 +22,8 @@ class CourseController extends GetxController {
   
   /// 每个分类对应的课程名称列表
   final Map<String, List<String>> typeCourseNames = {};
+
+  final Map<String, List<String>> _allCourseNamesByType = {};
 
   bool isCourseListLoading = true;
 
@@ -56,6 +62,14 @@ class CourseController extends GetxController {
   static double get listPaddingHorizontal => 40.w;
 
   @override
+  /// 控制器初始化：构建本地课程索引，并尝试用缓存课程清单进行首屏回显
+  void onInit() {
+    super.onInit();
+    _buildCourseIndex();
+    _loadCachedCourseList();
+  }
+
+  @override
   void onReady() {
     super.onReady();
     _bindCourseList();
@@ -66,6 +80,33 @@ class CourseController extends GetxController {
         _precacheAllSectionsInBackground();
       }
     });
+  }
+
+  /// 基于静态 coursesByName 构建“分类 -> 课程名列表”的索引
+  /// 用于在服务端课程清单到达时快速过滤，减少 UI 更新瞬间的计算量
+  void _buildCourseIndex() {
+    _allCourseNamesByType.clear();
+    for (final t in types) {
+      _allCourseNamesByType[t] = <String>[];
+    }
+
+    for (final entry in coursesByName.entries) {
+      final name = entry.key;
+      final type = entry.value['type'];
+      if (type is! String) continue;
+      final list = _allCourseNamesByType[type];
+      if (list == null) continue;
+      list.add(name);
+    }
+  }
+
+  /// 读取本地缓存的课程清单，并用于首屏显示（不阻塞后续服务端同步）
+  void _loadCachedCourseList() {
+    final cached = _storage.getList(_courseListCacheKey);
+    if (cached.isEmpty) {
+      return;
+    }
+    _applyCourseList(cached);
   }
 
   @override
@@ -82,9 +123,6 @@ class CourseController extends GetxController {
     isCourseListLoading = _socketService.isCourseListLoading.value;
     if (!isCourseListLoading) {
       _applyCourseList(_socketService.courseList);
-    } else {
-      typeCourseNames.clear();
-      update(["course"]);
     }
 
     _courseListWorker = ever<List<String>>(_socketService.courseList, (list) {
@@ -97,7 +135,6 @@ class CourseController extends GetxController {
     _courseListLoadingWorker = ever<bool>(_socketService.isCourseListLoading, (loading) {
       isCourseListLoading = loading;
       if (loading) {
-        typeCourseNames.clear();
         update(["course"]);
         return;
       }
@@ -106,19 +143,26 @@ class CourseController extends GetxController {
   }
 
   /// 将服务端返回的课程清单映射到本地 coursesByName，并按分类生成展示列表
+  /// 说明：
+  /// - 只展示服务端允许的课程
+  /// - 更新后触发导航定位刷新，并预缓存当前/相邻分类的首屏图片，减少首次显示与切换卡顿
   void _applyCourseList(List<String> serverCourseList) {
     final allowed = serverCourseList.where(coursesByName.containsKey).toSet();
 
     for (final t in types) {
-      typeCourseNames[t] = coursesByName.entries
-          .where((e) => e.value['type'] == t && allowed.contains(e.key))
-          .map((e) => e.key)
-          .toList();
+      final all = _allCourseNamesByType[t] ?? const <String>[];
+      typeCourseNames[t] = <String>[
+        for (final name in all)
+          if (allowed.contains(name)) name,
+      ];
     }
 
     update(["course"]);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshAllNavCenters();
+      _precacheSectionImages(currentTypeIndex);
+      _precacheAdjacentSections(currentTypeIndex);
+      _precacheAllSectionsInBackground();
     });
   }
 
@@ -166,6 +210,9 @@ class CourseController extends GetxController {
   }
 
   /// 点击导航滚动到指定分类
+  /// 说明：
+  /// - 立即更新导航高亮，再执行滚动动画，让交互更跟手
+  /// - 滚动前预缓存目标分类首屏图片，降低滚动到位时的图片解码卡顿
   void scrollToSection(int index) {
     if (index < 0 || index >= types.length) return;
     if (_isNavigating) return;
@@ -185,7 +232,7 @@ class CourseController extends GetxController {
     update(["course_nav_name"]);
     _updateOverlayFromCenters();
     
-    _precacheSectionImages(index);
+    unawaited(_precacheSectionImages(index, wait: true));
     final object = sectionKeys[index].currentContext?.findRenderObject();
     double? targetOffset;
     if (object != null) {

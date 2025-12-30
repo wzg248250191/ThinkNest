@@ -40,14 +40,50 @@ class CoursePage extends GetView<CourseController> {
   }
 
   /// 使用 CustomScrollView + SliverGrid 构建课程列表
+  /// 说明：
+  /// - 当本地有缓存课程清单时：优先展示列表，顶部显示“同步中”提示，等待服务端数据刷新
+  /// - 当无缓存且仍在加载时：显示全屏加载态
   Widget _buildCourseList() {
-    if (controller.isCourseListLoading) {
+    final hasAnyCourse = controller.typeCourseNames.values.any((e) => e.isNotEmpty);
+    if (controller.isCourseListLoading && !hasAnyCourse) {
       return _buildCourseListLoading();
     }
-    return CustomScrollView(
-      controller: controller.scrollController,
-      physics: const ClampingScrollPhysics(),
-      slivers: _buildSlivers(),
+    return Stack(
+      children: [
+        CustomScrollView(
+          controller: controller.scrollController,
+          physics: const ClampingScrollPhysics(),
+          slivers: _buildSlivers(),
+        ),
+        if (controller.isCourseListLoading)
+          Positioned(
+            top: 18.h,
+            left: CourseController.listPaddingHorizontal,
+            right: CourseController.listPaddingHorizontal,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 10.h),
+              decoration: BoxDecoration(
+                color: CustomAppColors.card.withAlpha(235),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: <Widget>[
+                PulseDot(
+                  size: 14.w,
+                  color: CustomAppColors.primary,
+                ),
+                SizedBox(width: 12.w),
+                TextWidget.label(
+                  '正在同步课程清单…',
+                  fontSize: 22.sp,
+                  color: CustomAppColors.subText,
+                ),
+              ].toRow(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 

@@ -5,4 +5,5 @@ static const logoPng = 'assets/icons/logo.png';
 static const splashPng = 'assets/images/splash.png';
 static const startPlayPng = 'assets/icons/startPlay.png';
 static const stopPlayPng = 'assets/icons/stopPlay.png';
+
 }

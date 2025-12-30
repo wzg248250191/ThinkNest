@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import '../../../common/index.dart';
 
@@ -14,6 +15,10 @@ class CourseWidget extends StatelessWidget {
   static const _svgBgPath = 'assets/svgs/CourseBg.svg';
 
   @override
+  /// 构建单个课程卡片
+  /// 说明：
+  /// - 外层尺寸由网格决定（SliverGrid 的 childAspectRatio 等）
+  /// - 这里通过 LayoutBuilder 按实际可用宽高动态缩放图片区域，避免不同屏幕尺寸下发生溢出
   Widget build(BuildContext context) {
     final m = coursesByName[name];
     final String imgPath = 'assets/images/courses/$name.png';
@@ -27,63 +32,75 @@ class CourseWidget extends StatelessWidget {
           color: CustomAppColors.card,
           borderRadius: BorderRadius.circular(AppRadius.card),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // 图片区域
-            _buildImageArea(context, imgPath),
-            // 推荐班级
-            Padding(
-              padding: EdgeInsets.only(top: 0.h),
-              child: _buildInfoText('推荐班级：', recommendedClass),
-            ),
-            // 重点领域
-            Padding(
-              padding: EdgeInsets.only(top: 4.h),
-              child: _buildInfoText('重点领域：', decoration),
-            ),
-            // 课程名称
-            Padding(
-              padding: EdgeInsets.only(top: 8.h),
-              child: Text(
-                name,
-                style: TextStyle(
-                  fontSize: 26.sp,
-                  fontWeight: FontWeight.w400,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final maxW = constraints.maxWidth;
+            final maxH = constraints.maxHeight;
+
+            final imageSide = math.min(maxW, maxH * 0.66);
+
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: imageSide,
+                  height: imageSide,
+                  child: _buildImageArea(context, imgPath, side: imageSide),
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+                Padding(
+                  padding: EdgeInsets.only(top: 0.h),
+                  child: _buildInfoText('推荐班级：', recommendedClass),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(top: 4.h),
+                  child: _buildInfoText('重点领域：', decoration),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(top: 8.h),
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 26.sp,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildImageArea(BuildContext context, String imgPath) {
+  /// 构建课程图片区域
+  /// [side] 为当前卡片可用尺寸下计算出的图片边长，用于自适应不同分辨率
+  /// 同时根据 [side] 限制图片解码尺寸，减少内存与卡顿
+  Widget _buildImageArea(BuildContext context, String imgPath, {required double side}) {
     // 🚀 计算实际需要的图片尺寸，限制解码大小减少内存
     final dpr = MediaQuery.of(context).devicePixelRatio;
-    final cacheSize = (210 * dpr).round();
+    final cacheSize = (side * dpr).round();
     
     return SizedBox(
-      width: 210.w,
-      height: 210.h,
+      width: side,
+      height: side,
       child: Stack(
         alignment: Alignment.center,
         children: [
           ImageWidget.svg(
             _svgBgPath,
-            width: 160.w,
-            height: 160.h,
+            width: side * 0.76,
+            height: side * 0.76,
             fit: BoxFit.cover,
           ),
           Image.asset(
             imgPath,
-            width: 210.w,
-            height: 210.h,
+            width: side,
+            height: side,
             fit: BoxFit.cover,
             // 🚀 限制解码尺寸，减少内存占用
             cacheWidth: cacheSize,
@@ -98,6 +115,9 @@ class CourseWidget extends StatelessWidget {
     );
   }
 
+  /// 构建“标签 + 值”的信息文本行
+  /// 说明：
+  /// - 固定单行显示并省略，避免小屏/窄屏时换行导致卡片高度溢出
   Widget _buildInfoText(String label, String value) {
     return Text.rich(
       TextSpan(
@@ -109,6 +129,8 @@ class CourseWidget extends StatelessWidget {
       ),
       style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w400),
       textAlign: TextAlign.center,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

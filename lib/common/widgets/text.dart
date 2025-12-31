@@ -29,10 +29,13 @@ class TextWidget extends StatelessWidget {
     this.overflow,
     this.textAlign,
     this.fontStyle,
+    this.inlineSpan,
   });
 
   /// 文字
   final String text;
+
+  final InlineSpan? inlineSpan;
 
   /// 排版类型
   final TextWidgetType? type;
@@ -81,7 +84,8 @@ class TextWidget extends StatelessWidget {
     this.textAlign,
     this.textStyle,
     this.fontStyle,
-  }) : type = TextWidgetType.h1;
+  })  : type = TextWidgetType.h1,
+        inlineSpan = null;
 
   /// h2
   const TextWidget.h2(
@@ -97,7 +101,8 @@ class TextWidget extends StatelessWidget {
     this.textAlign,
     this.textStyle,
     this.fontStyle,
-  }) : type = TextWidgetType.h2;
+  })  : type = TextWidgetType.h2,
+        inlineSpan = null;
 
   /// h3
   const TextWidget.h3(
@@ -113,7 +118,8 @@ class TextWidget extends StatelessWidget {
     this.textAlign,
     this.textStyle,
     this.fontStyle,
-  }) : type = TextWidgetType.h3;
+  })  : type = TextWidgetType.h3,
+        inlineSpan = null;
 
   /// h4
   const TextWidget.h4(
@@ -129,7 +135,8 @@ class TextWidget extends StatelessWidget {
     this.textAlign,
     this.textStyle,
     this.fontStyle,
-  }) : type = TextWidgetType.h4;
+  })  : type = TextWidgetType.h4,
+        inlineSpan = null;
 
   /// body
   const TextWidget.body(
@@ -145,7 +152,8 @@ class TextWidget extends StatelessWidget {
     this.textAlign,
     this.textStyle,
     this.fontStyle,
-  }) : type = TextWidgetType.body;
+  })  : type = TextWidgetType.body,
+        inlineSpan = null;
 
   /// label
   const TextWidget.label(
@@ -161,7 +169,8 @@ class TextWidget extends StatelessWidget {
     this.textAlign,
     this.textStyle,
     this.fontStyle,
-  }) : type = TextWidgetType.label;
+  })  : type = TextWidgetType.label,
+        inlineSpan = null;
 
   /// muted
   const TextWidget.muted(
@@ -177,7 +186,24 @@ class TextWidget extends StatelessWidget {
     this.textAlign,
     this.textStyle,
     this.fontStyle,
-  }) : type = TextWidgetType.muted;
+  })  : type = TextWidgetType.muted,
+        inlineSpan = null;
+
+  const TextWidget.rich(
+    this.inlineSpan, {
+    super.key,
+    this.type,
+    this.fontSize,
+    this.scale,
+    this.textStyle,
+    this.color,
+    this.weight,
+    this.maxLines,
+    this.softWrap,
+    this.overflow,
+    this.textAlign,
+    this.fontStyle,
+  }) : text = '';
 
   /// 文字尺寸
   double _fontSize() {
@@ -241,14 +267,27 @@ class TextWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final baseStyle = TextStyle(
+      color: _color(context),
+      fontSize: _fontSize(),
+      fontWeight: weight,
+      fontStyle: fontStyle,
+    ).merge(textStyle);
+
+    final span = inlineSpan;
+    if (span != null) {
+      return Text.rich(
+        span,
+        style: baseStyle,
+        maxLines: maxLines,
+        softWrap: softWrap,
+        overflow: overflow,
+        textAlign: textAlign,
+      );
+    }
     return Text(
       text,
-      style: TextStyle(
-        color: _color(context),
-        fontSize: _fontSize(),
-        fontWeight: weight,
-        fontStyle: fontStyle,
-      ).merge(textStyle),
+      style: baseStyle,
       maxLines: maxLines,
       softWrap: softWrap,
       overflow: overflow,

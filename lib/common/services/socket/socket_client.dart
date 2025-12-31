@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:think_nest/common/proto/Common.pb.dart';
-import 'message_constants.dart';
-import 'message_parser.dart';
+
+import '../../index.dart';
+
 
 /// Socket连接状态
 enum SocketState {
@@ -69,6 +69,9 @@ class SocketClient {
   
   /// 是否主动断开
   bool _isManualDisconnect = false;
+  
+  /// 是否允许自动重连（用于区分“启动阶段轻量恢复”和“业务强关联下的持续重连”）
+  bool _autoReconnectEnabled = true;
 
   /// 获取当前连接状态
   SocketState get state => _state;
@@ -81,7 +84,8 @@ class SocketClient {
   /// 说明：
   /// - 建立 TCP 长连接用于发送/接收封包后的 protobuf `MESSAGE`
   /// - 连接成功后会启动心跳，避免长时间空闲被系统/路由器断开
-  Future<bool> connect(String host, int port) async {
+  /// - [autoReconnect] 为 false 时：连接失败/断开不会触发自动重连（适合启动阶段尝试）
+  Future<bool> connect(String host, int port, {bool autoReconnect = true}) async {
     if (_state == SocketState.connected) {
       print('Socket已经连接');
       return true;
@@ -90,8 +94,22 @@ class SocketClient {
     _host = host;
     _port = port;
     _isManualDisconnect = false;
+    // 启动阶段可关闭自动重连，避免网络未就绪时无意义的持续重试
+    _autoReconnectEnabled = autoReconnect;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempts = 0;
     
     return await _doConnect();
+  }
+
+  /// 动态切换自动重连开关（通常用于：启动连接成功后再启用持续重连）
+  void setAutoReconnectEnabled(bool enabled) {
+    _autoReconnectEnabled = enabled;
+    if (!enabled) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+    }
   }
 
   /// 执行连接
@@ -111,6 +129,8 @@ class SocketClient {
       );
 
       print('Socket连接成功: ${_socket?.remoteAddress.address}:${_socket?.remotePort}');
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
       
       // 监听数据接收
       _socket!.listen(
@@ -133,7 +153,7 @@ class SocketClient {
       onError?.call('连接失败: $e');
       
       // 尝试重连
-      if (!_isManualDisconnect) {
+      if (!_isManualDisconnect && _autoReconnectEnabled) {
         _scheduleReconnect();
       }
       
@@ -356,13 +376,16 @@ class SocketClient {
     _receiveBuffer.clear();
 
     // 如果不是主动断开，则尝试重连
-    if (!_isManualDisconnect) {
+    if (!_isManualDisconnect && _autoReconnectEnabled) {
       _scheduleReconnect();
     }
   }
 
   /// 安排重连
   void _scheduleReconnect() {
+    if (!_autoReconnectEnabled) {
+      return;
+    }
     if (_reconnectAttempts >= maxReconnectAttempts) {
       print('已达到最大重连次数，停止重连');
       onError?.call('无法连接到服务器');
@@ -374,6 +397,10 @@ class SocketClient {
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: reconnectInterval), () {
+      // Timer 触发时可能已经连上/或被禁用重连，直接忽略即可
+      if (_state == SocketState.connected || _socket != null || !_autoReconnectEnabled) {
+        return;
+      }
       print('开始第$_reconnectAttempts次重连...');
       _doConnect();
     });
@@ -424,6 +451,7 @@ class SocketClient {
   void disconnect() {
     print('主动断开Socket连接');
     _isManualDisconnect = true;
+    _autoReconnectEnabled = false;
     _reconnectTimer?.cancel();
     _stopHeartbeat();
     

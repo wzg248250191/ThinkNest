@@ -21,6 +21,7 @@ class ImageWidget extends StatefulWidget {
     this.width,
     this.height,
     this.fit,
+    this.alignment,
     this.placeholder,
     this.errorWidget,
     this.elevation,
@@ -45,6 +46,8 @@ class ImageWidget extends StatefulWidget {
   /// 自适应方式
   final BoxFit? fit;
 
+  final AlignmentGeometry? alignment;
+
   /// 占位图
   final Widget? placeholder;
 
@@ -64,6 +67,7 @@ class ImageWidget extends StatefulWidget {
     this.width,
     this.height,
     this.fit,
+    this.alignment,
     this.placeholder,
     this.errorWidget,
     this.elevation,
@@ -77,6 +81,7 @@ class ImageWidget extends StatefulWidget {
     this.width,
     this.height,
     this.fit,
+    this.alignment,
     this.placeholder,
     this.errorWidget,
     this.elevation,
@@ -90,6 +95,7 @@ class ImageWidget extends StatefulWidget {
     this.width,
     this.height,
     this.fit,
+    this.alignment,
     this.placeholder,
     this.errorWidget,
     this.elevation,
@@ -120,6 +126,7 @@ class _ImageWidgetState extends State<ImageWidget> {
       ws = Image.asset(
         widget.path,
         fit: widget.fit,
+        alignment: widget.alignment ?? Alignment.center,
         color: widget.color,
         cacheWidth: cw,
         cacheHeight: ch,
@@ -169,6 +176,7 @@ class _ImageWidgetState extends State<ImageWidget> {
       ws = SvgPicture.asset(
         widget.path,
         fit: widget.fit ?? BoxFit.contain,
+        alignment: widget.alignment ?? Alignment.center,
         colorFilter: widget.color != null
             ? ColorFilter.mode(widget.color!, BlendMode.srcIn)
             : null,
@@ -187,6 +195,7 @@ class _ImageWidgetState extends State<ImageWidget> {
       ws = SvgPicture.network(
         widget.path,
         fit: widget.fit ?? BoxFit.contain,
+        alignment: widget.alignment ?? Alignment.center,
         colorFilter: widget.color != null
             ? ColorFilter.mode(widget.color!, BlendMode.srcIn)
             : null,
@@ -205,6 +214,7 @@ class _ImageWidgetState extends State<ImageWidget> {
       ws = SvgPicture.string(
         widget.path,
         fit: widget.fit ?? BoxFit.contain,
+        alignment: widget.alignment ?? Alignment.center,
         colorFilter: widget.color != null
             ? ColorFilter.mode(widget.color!, BlendMode.srcIn)
             : null,

@@ -19,9 +19,6 @@ class CoursePage extends GetView<CourseController> {
           body: Stack(
             children: [
               _buildView(),
-              
-              // 悬浮窗：显示当前正在运行的课程
-              // 移至 CoursePage 内部，确保只在课程列表页显示
               const FloatingCourseWidget(),
             ],
           ),
@@ -30,13 +27,76 @@ class CoursePage extends GetView<CourseController> {
     );
   }
 
+  Widget _buildSyncBannerSlot() {
+    final hasAnyCourse = controller.typeCourseNames.values.any((e) => e.isNotEmpty);
+    final bool showSyncBanner = controller.isCourseListLoading && hasAnyCourse;
+    final double height = 90.h;
+
+    if (!showSyncBanner) {
+      return SizedBox(height: height);
+    }
+    return SizedBox(
+      height: height,
+      child: Center(
+        child: SizedBox(
+          width: 1720.w,
+          child: <Widget>[
+            SizedBox(
+              width: 1480.w,
+              child: Center(
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 10.h),
+                  decoration: BoxDecoration(
+                    color: CustomAppColors.card.withAlpha(235),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: <Widget>[
+                    PulseDot(
+                      size: 14.w,
+                      color: CustomAppColors.primary,
+                    ),
+                    SizedBox(width: 12.w),
+                    TextWidget.label(
+                      '正在同步课程清单…',
+                      fontSize: 22.sp,
+                      color: CustomAppColors.subText,
+                    ),
+                  ].toRow(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 240.w),
+          ].toRow(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildView() {
-    return <Widget>[
-      // 左侧课程列表
+    final row = <Widget>[
       SizedBox(width: 1480.w, child: _buildCourseList()),
-      // 右侧导航栏
       SizedBox(width: 240.w, child: const CourseNavWidget()),
-    ].toRow().constrained(height: 808.h).center();
+    ].toRow().constrained(height: 808.h);
+
+    final banner = _buildSyncBannerSlot();
+    final double bannerOffsetY = -(808.h / 2 + 90.h / 2);
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        row.center(),
+        Transform.translate(
+          offset: Offset(0, bannerOffsetY),
+          child: banner,
+        ),
+      ],
+    );
   }
 
   /// 使用 CustomScrollView + SliverGrid 构建课程列表
@@ -48,42 +108,10 @@ class CoursePage extends GetView<CourseController> {
     if (controller.isCourseListLoading && !hasAnyCourse) {
       return _buildCourseListLoading();
     }
-    return Stack(
-      children: [
-        CustomScrollView(
-          controller: controller.scrollController,
-          physics: const ClampingScrollPhysics(),
-          slivers: _buildSlivers(),
-        ),
-        if (controller.isCourseListLoading)
-          Positioned(
-            top: 18.h,
-            left: CourseController.listPaddingHorizontal,
-            right: CourseController.listPaddingHorizontal,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 10.h),
-              decoration: BoxDecoration(
-                color: CustomAppColors.card.withAlpha(235),
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-              child: <Widget>[
-                PulseDot(
-                  size: 14.w,
-                  color: CustomAppColors.primary,
-                ),
-                SizedBox(width: 12.w),
-                TextWidget.label(
-                  '正在同步课程清单…',
-                  fontSize: 22.sp,
-                  color: CustomAppColors.subText,
-                ),
-              ].toRow(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.center,
-              ),
-            ),
-          ),
-      ],
+    return CustomScrollView(
+      controller: controller.scrollController,
+      physics: const ClampingScrollPhysics(),
+      slivers: _buildSlivers(),
     );
   }
 
@@ -109,11 +137,6 @@ class CoursePage extends GetView<CourseController> {
   /// 构建所有 Sliver 组件
   List<Widget> _buildSlivers() {
     final List<Widget> slivers = [];
-    
-    // 顶部间距
-    slivers.add(SliverToBoxAdapter(
-      child: SizedBox(height: CourseController.listPaddingTop),
-    ));
     
     // 遍历每个分类
     for (int i = 0; i < controller.types.length; i++) {
@@ -149,8 +172,7 @@ class CoursePage extends GetView<CourseController> {
 
   /// 构建分类标题
   Widget _buildSectionTitle(String typeName, GlobalKey sectionKey) {
-    final en = courseType[typeName] ?? '';
-    
+    final en = courseType[typeName] ?? '';    
     return Container(
       key: sectionKey,
       padding: EdgeInsets.only(
@@ -158,27 +180,38 @@ class CoursePage extends GetView<CourseController> {
         right: CourseController.listPaddingHorizontal,
         bottom: 24.h,
       ),
-      child: SizedBox(
-        height: 64.h,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: typeName,
-                  style: const TextStyle(color: CustomAppColors.primary),
+      child: <Widget>[
+        TextWidget.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: typeName,
+                style: const TextStyle(color: CustomAppColors.primary),
+              ),
+              TextSpan(
+                text: ' /$en',
+                style: TextStyle(
+                  color: CustomAppColors.subText,
+                  fontSize: 26.sp,
+                  fontWeight: FontWeight.w400,
                 ),
-                const TextSpan(text: '/'),
-                TextSpan(
-                  text: en,
-                  style: const TextStyle(color: CustomAppColors.subText),
-                ),
-              ],
-            ),
-            style: TextStyle(fontSize: 40.sp, fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
+          fontSize: 36.sp,
+          weight: FontWeight.w600,
         ),
+       // SizedBox(height: 6.h),
+        ImageWidget.svg(
+          AssetsSvgs.courseSplitSvg,
+          width: 1350.w,
+          height: 39.h,
+          fit: BoxFit.contain,
+          alignment: Alignment.centerLeft,
+        ),
+      ].toColumn(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
       ),
     );
   }

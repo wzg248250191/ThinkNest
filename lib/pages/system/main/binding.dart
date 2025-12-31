@@ -6,7 +6,6 @@ import '../../index.dart';
 class MainBinding implements Bindings {
   @override
   void dependencies() {
-    Get.lazyPut<PcCourseCommandSender>(() => PcCourseCommandSender());
     Get.lazyPut<PcCourseMessageHandler>(() => PcCourseMessageHandler());
     Get.lazyPut<CourseController>(() => CourseController());
     // 改为 put 并设置 permanent: true，使其常驻内存，支持后台状态保持和悬浮窗功能

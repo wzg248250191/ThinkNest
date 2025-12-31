@@ -3,50 +3,7 @@
 import 'dart:async';
 import 'package:think_nest/common/proto/Common.pb.dart';
 import 'socket_client.dart';
-
-/// 服务器类型
-enum ServerType {
-  /// 墙面服务器
-  wall,
-  
-  /// 桌面服务器
-  desktop,
-}
-
-/// 服务器类型扩展
-extension ServerTypeExtension on ServerType {
-  /// 转换为CLIENTEND
-  CLIENTEND toClientEnd() {
-    switch (this) {
-      case ServerType.wall:
-        return CLIENTEND.WALL;
-      case ServerType.desktop:
-        return CLIENTEND.Desktop;
-    }
-  }
-  
-  /// 从CLIENTEND转换
-  static ServerType fromClientEnd(CLIENTEND clientEnd) {
-    switch (clientEnd) {
-      case CLIENTEND.WALL:
-        return ServerType.wall;
-      case CLIENTEND.Desktop:
-        return ServerType.desktop;
-      default:
-        return ServerType.desktop;
-    }
-  }
-  
-  /// 获取显示名称
-  String get displayName {
-    switch (this) {
-      case ServerType.wall:
-        return '墙面服务器';
-      case ServerType.desktop:
-        return '桌面服务器';
-    }
-  }
-}
+import 'server_type.dart';
 
 /// Socket客户端管理器
 /// 管理多个Socket客户端连接（墙面服务器和桌面服务器）
@@ -63,17 +20,11 @@ class SocketClientManager {
   /// 桌面服务器IP
   String? _desktopServerIp;
   
-  /// 墙面服务器消息回调
-  Function(MESSAGE message)? onWallMessageReceived;
+  /// 消息回调（按服务器类型分发）
+  Function(ServerType serverType, MESSAGE message)? onMessageReceived;
   
-  /// 桌面服务器消息回调
-  Function(MESSAGE message)? onDesktopMessageReceived;
-  
-  /// 墙面服务器状态变化回调
-  Function(SocketState state)? onWallStateChanged;
-  
-  /// 桌面服务器状态变化回调
-  Function(SocketState state)? onDesktopStateChanged;
+  /// 状态变化回调（按服务器类型分发）
+  Function(ServerType serverType, SocketState state)? onStateChanged;
   
   /// 错误回调
   Function(ServerType serverType, String error)? onError;
@@ -89,10 +40,10 @@ class SocketClientManager {
     
     // 设置墙面服务器回调
     _wallClient.onMessageReceived = (message) {
-      onWallMessageReceived?.call(message);
+      onMessageReceived?.call(ServerType.wall, message);
     };
     _wallClient.onStateChanged = (state) {
-      onWallStateChanged?.call(state);
+      onStateChanged?.call(ServerType.wall, state);
     };
     _wallClient.onError = (error) {
       onError?.call(ServerType.wall, error);
@@ -100,10 +51,10 @@ class SocketClientManager {
     
     // 设置桌面服务器回调
     _desktopClient.onMessageReceived = (message) {
-      onDesktopMessageReceived?.call(message);
+      onMessageReceived?.call(ServerType.desktop, message);
     };
     _desktopClient.onStateChanged = (state) {
-      onDesktopStateChanged?.call(state);
+      onStateChanged?.call(ServerType.desktop, state);
     };
     _desktopClient.onError = (error) {
       onError?.call(ServerType.desktop, error);
@@ -135,9 +86,13 @@ class SocketClientManager {
   String? get desktopServerIp => _desktopServerIp;
 
   /// 连接到墙面服务器
-  Future<bool> connectToWall(String host, int port) async {
+  ///
+  /// 说明：
+  /// - [autoReconnect] 用于控制底层 SocketClient 是否在断线后自动重连
+  /// - 启动阶段通常传 false，连接成功后再由上层手动开启重连
+  Future<bool> connectToWall(String host, int port, {bool autoReconnect = true}) async {
     print('连接到墙面服务器: $host:$port');
-    final success = await _wallClient.connect(host, port);
+    final success = await _wallClient.connect(host, port, autoReconnect: autoReconnect);
     if (success) {
       _wallServerIp = host;
     }
@@ -145,9 +100,11 @@ class SocketClientManager {
   }
 
   /// 连接到桌面服务器
-  Future<bool> connectToDesktop(String host, int port) async {
+  ///
+  /// 说明同 [connectToWall]
+  Future<bool> connectToDesktop(String host, int port, {bool autoReconnect = true}) async {
     print('连接到桌面服务器: $host:$port');
-    final success = await _desktopClient.connect(host, port);
+    final success = await _desktopClient.connect(host, port, autoReconnect: autoReconnect);
     if (success) {
       _desktopServerIp = host;
     }
@@ -155,12 +112,15 @@ class SocketClientManager {
   }
 
   /// 根据服务器类型连接
-  Future<bool> connect(ServerType serverType, String host, int port) async {
+  ///
+  /// 说明：
+  /// - 统一入口，便于上层在“墙/桌”两条链路复用相同的连接策略
+  Future<bool> connect(ServerType serverType, String host, int port, {bool autoReconnect = true}) async {
     switch (serverType) {
       case ServerType.wall:
-        return await connectToWall(host, port);
+        return await connectToWall(host, port, autoReconnect: autoReconnect);
       case ServerType.desktop:
-        return await connectToDesktop(host, port);
+        return await connectToDesktop(host, port, autoReconnect: autoReconnect);
     }
   }
 
@@ -244,6 +204,11 @@ class SocketClientManager {
       case ServerType.desktop:
         return _desktopClient;
     }
+  }
+
+  /// 动态切换指定服务端的自动重连开关
+  void setAutoReconnectEnabled(ServerType serverType, bool enabled) {
+    getClient(serverType).setAutoReconnectEnabled(enabled);
   }
 
   /// 释放资源

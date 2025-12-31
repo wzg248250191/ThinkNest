@@ -6,6 +6,10 @@ import 'package:flutter/material.dart';
 import '../../../common/index.dart';
 import '../models/device_info_config.dart';
 
+///设备信息项
+///
+///说明：
+///- 用于显示和编辑设备的基本信息（如 IP 地址、端口号、打开/关闭指令等）
 class DeviceInfoItem extends StatefulWidget {
   const DeviceInfoItem({
     super.key,

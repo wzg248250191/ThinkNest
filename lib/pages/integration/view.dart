@@ -21,8 +21,8 @@ class IntegrationPage extends GetView<IntegrationController> {
           color: color,
         ),
         size: 200.w,
-        state: controller.mainState,
-        onStateChanged: controller.setMainState,
+        state: controller.switchState(IntegrationSwitchType.main),
+        onStateChanged: (value) => controller.onSwitchStateChanged(IntegrationSwitchType.main, value),
       ).paddingBottom(100.w),
       <Widget>[
      SwitchCircleButton(
@@ -34,8 +34,8 @@ class IntegrationPage extends GetView<IntegrationController> {
           color: color,
         ),
         size: 200.w,
-        state: controller.wallState,
-        onStateChanged: controller.setWallState,
+        state: controller.switchState(IntegrationSwitchType.wall),
+        onStateChanged: (value) => controller.onSwitchStateChanged(IntegrationSwitchType.wall, value),
       ),
       SwitchCircleButton(
         name: '桌面开关',
@@ -46,8 +46,8 @@ class IntegrationPage extends GetView<IntegrationController> {
           color: color,
         ),
         size: 200.w,
-        state: controller.deskState,
-        onStateChanged: controller.setDeskState,
+        state: controller.switchState(IntegrationSwitchType.desk),
+        onStateChanged: (value) => controller.onSwitchStateChanged(IntegrationSwitchType.desk, value),
       ),
       SwitchCircleButton(
         name: '灯光开关',
@@ -58,8 +58,8 @@ class IntegrationPage extends GetView<IntegrationController> {
           color: color,
         ),
         size: 200.w,
-        state: controller.lightState,
-        onStateChanged: controller.setLightState,
+        state: controller.switchState(IntegrationSwitchType.light),
+        onStateChanged: (value) => controller.onSwitchStateChanged(IntegrationSwitchType.light, value),
       ),
       SwitchCircleButton(
         name: '窗帘开关',
@@ -70,8 +70,8 @@ class IntegrationPage extends GetView<IntegrationController> {
           color: color,
         ),
         size: 200.w,
-        state: controller.curtainState,
-        onStateChanged: controller.setCurtainState,
+        state: controller.switchState(IntegrationSwitchType.curtain),
+        onStateChanged: (value) => controller.onSwitchStateChanged(IntegrationSwitchType.curtain, value),
       )].toRow(mainAxisAlignment: MainAxisAlignment.spaceEvenly)
     ].toColumn(mainAxisAlignment: MainAxisAlignment.center).center();
   }

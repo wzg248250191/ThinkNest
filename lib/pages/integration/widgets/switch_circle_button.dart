@@ -3,7 +3,10 @@ import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:think_nest/common/index.dart';
 import '../models/switch_circle_state.dart';
-
+///开关圆按钮
+///
+///说明：
+///- 用于切换开关状态的圆形按钮
 class SwitchCircleButton extends StatelessWidget {
   final WidgetScale scale;
   final String name;
@@ -58,7 +61,8 @@ class SwitchCircleButton extends StatelessWidget {
     final Color inactive = inactiveColor ?? const Color(0xFF9CA3AF);
     final Color disabledC = disabledColor ?? const Color(0xFFBDBDBD);
 
-    final bool effectiveEnabled = state?.enabled ?? enabled;
+    final bool effectiveBlocked = state?.blocked ?? false;
+    final bool effectiveEnabled = (state?.enabled ?? enabled) && !effectiveBlocked;
     final bool effectiveIsOn = state?.isOn ?? isOn;
     final bool disabled = !effectiveEnabled;
     final Color borderColor = disabled

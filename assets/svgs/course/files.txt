@@ -4,6 +4,7 @@ static const courseCategoryTimelineSvg = 'assets/svgs/course/course_category_tim
 static const courseFullscreenSvg = 'assets/svgs/course/course_fullscreen.svg';
 static const courseHeaderLineSvg = 'assets/svgs/course/course_header_line.svg';
 static const coursePlayDesktopSvg = 'assets/svgs/course/course_play_desktop.svg';
+static const courseSplitSvg = 'assets/svgs/course/course_split.svg';
 static const deskSvg = 'assets/svgs/course/desk.svg';
 static const deskbgSvg = 'assets/svgs/course/deskbg.svg';
 static const muteSvg = 'assets/svgs/course/mute.svg';

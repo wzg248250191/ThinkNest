@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 
 import '../../../../../../common/index.dart';
-import '../data/single_course_command_sender.dart';
+import '../data/course_net_operation_table.dart';
 import '../data/pc_course_message_handler.dart';
 import 'single_course_controller.dart';
 
@@ -14,9 +14,9 @@ enum WallArea {
 class WallController extends GetxController {
   WallController();
 
-  final PcCourseCommandSender _sender = Get.find<PcCourseCommandSender>();
   final SingleCourseController _courseController = Get.find<SingleCourseController>();
   final PcCourseMessageHandler _handler = Get.find<PcCourseMessageHandler>();
+  SocketService get _socketService => Get.find<SocketService>();
 
   // 墙面开关状态
   final RxBool leftPower = false.obs;
@@ -159,35 +159,47 @@ class WallController extends GetxController {
   }
 
   Future<bool> _sendWallPower(WallArea area, bool enabled) {
-    switch (area) {
-      case WallArea.left:
-        return _sender.leftWallOpenOrClose(enabled);
-      case WallArea.middle:
-        return _sender.midWallOpenOrClose(enabled);
-      case WallArea.right:
-        return _sender.rightWallOpenOrClose(enabled);
+    if (!_socketService.isConnected(ServerType.wall)) {
+      return Future.value(false);
     }
+    final String op = switch (area) {
+      WallArea.left =>
+        enabled ? CourseNetOperationTable.wallLClose.code : CourseNetOperationTable.wallLOpen.code,
+      WallArea.middle =>
+        enabled ? CourseNetOperationTable.wallMClose.code : CourseNetOperationTable.wallMOpen.code,
+      WallArea.right =>
+        enabled ? CourseNetOperationTable.wallRClose.code : CourseNetOperationTable.wallROpen.code,
+    };
+    _socketService.sendUnityOperation(ServerType.wall, op);
+    return Future.value(true);
   }
 
   Future<bool> _sendWallInteract(WallArea area, bool enabled) {
-    switch (area) {
-      case WallArea.left:
-        return _sender.leftWallEnbale(enabled);
-      case WallArea.middle:
-        return _sender.midWallEnbale(enabled);
-      case WallArea.right:
-        return _sender.rightWallEnbale(enabled);
+    if (!_socketService.isConnected(ServerType.wall)) {
+      return Future.value(false);
     }
+    final String op = switch (area) {
+      WallArea.left =>
+        enabled ? CourseNetOperationTable.wallLPause.code : CourseNetOperationTable.wallLPlay.code,
+      WallArea.middle =>
+        enabled ? CourseNetOperationTable.wallMPause.code : CourseNetOperationTable.wallMPlay.code,
+      WallArea.right =>
+        enabled ? CourseNetOperationTable.wallRPause.code : CourseNetOperationTable.wallRPlay.code,
+    };
+    _socketService.sendUnityOperation(ServerType.wall, op);
+    return Future.value(true);
   }
 
   Future<bool> _sendWallRestart(WallArea area) {
-    switch (area) {
-      case WallArea.left:
-        return _sender.leftWallRestart();
-      case WallArea.middle:
-        return _sender.midWallRestart();
-      case WallArea.right:
-        return _sender.rightWallRestart();
+    if (!_socketService.isConnected(ServerType.wall)) {
+      return Future.value(false);
     }
+    final String op = switch (area) {
+      WallArea.left => CourseNetOperationTable.wallLRestart.code,
+      WallArea.middle => CourseNetOperationTable.wallMRestart.code,
+      WallArea.right => CourseNetOperationTable.wallRRestart.code,
+    };
+    _socketService.sendUnityOperation(ServerType.wall, op);
+    return Future.value(true);
   }
 }

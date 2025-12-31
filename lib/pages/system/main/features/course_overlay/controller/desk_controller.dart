@@ -1,14 +1,14 @@
 import 'package:get/get.dart';
 
 import '../../../../../../common/index.dart';
-import '../data/single_course_command_sender.dart';
+import '../data/course_net_operation_table.dart';
 import 'single_course_controller.dart';
 
 class DeskController extends GetxController {
   DeskController();
 
-  final PcCourseCommandSender _sender = Get.find<PcCourseCommandSender>();
   final SingleCourseController _courseController = Get.find<SingleCourseController>();
+  SocketService get _socketService => Get.find<SocketService>();
 
   bool isTesting = false;
 
@@ -26,7 +26,7 @@ class DeskController extends GetxController {
       return;
     }
 
-    final bool success = await _sender.startDeskGame(v);
+    final bool success = await _startDeskGame(v);
     if (!success) {
       ToastUtils.show('桌面服务器未连接');
       return;
@@ -34,5 +34,16 @@ class DeskController extends GetxController {
 
     isTesting = v;
     update(['desk_part']);
+  }
+
+  Future<bool> _startDeskGame(bool isOn) async {
+    if (!_socketService.isConnected(ServerType.desktop)) {
+      return false;
+    }
+    _socketService.sendUnityOperation(
+      ServerType.desktop,
+      isOn ? CourseNetOperationTable.deskPlayTest.code : CourseNetOperationTable.deskTestOver.code,
+    );
+    return true;
   }
 }

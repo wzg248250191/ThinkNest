@@ -107,7 +107,6 @@ lib/common/services/socket/
 ├── socket_client_manager.dart    # 多客户端管理器
 ├── socket_service.dart           # GetX Service封装
 ├── udp_discovery_service.dart    # UDP服务器发现服务
-├── example_usage.dart            # 使用示例
 ├── message_constants.dart        # 消息常量定义（内部使用）
 ├── message_parser.dart           # 消息解析器（内部使用）
 └── README.md                     # 说明文档

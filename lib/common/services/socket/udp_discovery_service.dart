@@ -1,46 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:think_nest/common/proto/Common.pb.dart';
 
-/// 发现的服务器信息
-class DiscoveredServer {
-  /// 服务器IP地址
-  final String ipAddress;
-  
-  /// 服务器端口（TCP端口，用于Socket连接）
-  final int tcpPort;
-  
-  /// 服务器类型（WALL或Desktop）
-  final CLIENTEND serverType;
-  
-  /// 发现时间
-  final DateTime discoveredAt;
-  
-  /// Echo消息
-  final String? echoMessage;
+import '../../index.dart';
 
-  DiscoveredServer({
-    required this.ipAddress,
-    required this.tcpPort,
-    required this.serverType,
-    required this.discoveredAt,
-    this.echoMessage,
-  });
-
-  @override
-  String toString() {
-    return 'DiscoveredServer(ip: $ipAddress, port: $tcpPort, type: $serverType)';
-  }
-  
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is DiscoveredServer && other.ipAddress == ipAddress;
-  }
-  
-  @override
-  int get hashCode => ipAddress.hashCode;
-}
 
 /// UDP发现服务
 /// 用于自动发现局域网内的PC服务器
@@ -260,7 +222,14 @@ class UdpDiscoveryService {
   }
 
   /// 手动停止扫描
+  ///
+  /// 说明：
+  /// - 通过 complete 让 startDiscovery 内部等待尽快结束
+  /// - 再关闭 Socket，释放端口资源
   void stopDiscovery() {
+    if (!(_discoveryDoneCompleter?.isCompleted ?? true)) {
+      _discoveryDoneCompleter?.complete();
+    }
     _stopDiscovery();
   }
 

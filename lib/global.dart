@@ -4,6 +4,12 @@ import 'package:get/get.dart';
 import 'common/index.dart';
 
 class Global {
+  /// 全局初始化入口
+  ///
+  /// 说明：
+  /// - 注册常驻服务（GetX）
+  /// - 初始化本地存储
+  /// - 启动后异步恢复 Socket 连接（不阻塞启动）
   static Future<void> init() async {
     // 插件初始化：
     //这个表示先就行原生端（ios android）插件注册，然后再处理后续操作，这样能保证代码运行正确。
@@ -20,37 +26,37 @@ class Global {
       Get.putAsync<ConfigService>(() async => await ConfigService().init()),    
     ]).whenComplete(() {});
     
-    // 应用启动后自动发现并连接服务器（异步执行，不阻塞启动）
-    _autoConnectServers();
+    _recoverServersFromCache();
     
     // 如果自动发现失败，可以取消注释下面的代码，手动指定服务器 IP
     // _manualConnectServers();
   }
   
-  /// 自动发现并连接局域网内的服务器
-  static Future<void> _autoConnectServers() async {
+  /// 启动阶段尝试恢复服务器连接（墙面/桌面两条链路）
+  ///
+  /// 说明：
+  /// - 优先用历史 IP 直连
+  /// - 必要时做短 UDP 扫描兜底
+  static Future<void> _recoverServersFromCache() async {
     try {
       final socketService = Get.find<SocketService>();
-      print('开始自动发现服务器...');
-      
-      // 扫描局域网内的服务器（超时3秒）
-      final results = await socketService.autoDiscoverAndConnectAll(
-        timeout: const Duration(seconds: 3),
-      );
+      print('开始恢复历史服务器连接...');
+
+      final results = await socketService.recoverConnectionsAtStartup();
       
       if (results[ServerType.wall] == true) {
         print('✅ 墙面服务器已连接');
       } else {
-        print('❌ 墙面服务器未找到或连接失败');
+        print('❌ 墙面服务器未恢复连接');
       }
       
       if (results[ServerType.desktop] == true) {
         print('✅ 桌面服务器已连接');
       } else {
-        print('❌ 桌面服务器未找到或连接失败');
+        print('❌ 桌面服务器未恢复连接');
       }
     } catch (e) {
-      print('自动发现服务器失败: $e');
+      print('恢复历史服务器连接失败: $e');
     }
   }
   
@@ -95,7 +101,7 @@ class Global {
   static Future<bool> connectToWallServer(String ip, {int port = 8000}) async {
     final socketService = Get.find<SocketService>();
     print('尝试连接墙面服务器: $ip:$port');
-    final success = await socketService.connectToWallServer(ip, port: port);
+    final success = await socketService.connect(ServerType.wall, ip, port);
     if (success) {
       print('✅ 墙面服务器连接成功: $ip:$port');
     } else {
@@ -108,7 +114,7 @@ class Global {
   static Future<bool> connectToDesktopServer(String ip, {int port = 8000}) async {
     final socketService = Get.find<SocketService>();
     print('尝试连接桌面服务器: $ip:$port');
-    final success = await socketService.connectToDesktopServer(ip, port: port);
+    final success = await socketService.connect(ServerType.desktop, ip, port);
     if (success) {
       print('✅ 桌面服务器连接成功: $ip:$port');
     } else {
@@ -122,13 +128,13 @@ class Global {
     final socketService = Get.find<SocketService>();
     print('======== 服务器连接状态 ========');
     print('墙面服务器:');
-    print('  - 已连接: ${socketService.isWallConnected}');
-    print('  - IP: ${socketService.connectedWallServerIp.value ?? "未连接"}');
-    print('  - 状态: ${socketService.wallConnectionState.value}');
+    print('  - 已连接: ${socketService.isConnected(ServerType.wall)}');
+    print('  - IP: ${socketService.connectedServerIp(ServerType.wall).value ?? "未连接"}');
+    print('  - 状态: ${socketService.connectionState(ServerType.wall).value}');
     print('桌面服务器:');
-    print('  - 已连接: ${socketService.isDesktopConnected}');
-    print('  - IP: ${socketService.connectedDesktopServerIp.value ?? "未连接"}');
-    print('  - 状态: ${socketService.desktopConnectionState.value}');
+    print('  - 已连接: ${socketService.isConnected(ServerType.desktop)}');
+    print('  - IP: ${socketService.connectedServerIp(ServerType.desktop).value ?? "未连接"}');
+    print('  - 状态: ${socketService.connectionState(ServerType.desktop).value}');
     print('================================');
   }
   
@@ -138,7 +144,7 @@ class Global {
     
     printConnectionStatus();
     
-    if (!socketService.isWallConnected) {
+    if (!socketService.isConnected(ServerType.wall)) {
       print('❌ 无法发送：墙面服务器未连接');
       return;
     }

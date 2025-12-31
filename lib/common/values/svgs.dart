@@ -33,4 +33,6 @@ static const muteSvg = 'assets/svgs/course/mute.svg';
 
 static const startTestSvg = 'assets/svgs/course/start_test.svg';
 static const stopTestSvg = 'assets/svgs/course/stop_test.svg';
+
+static const courseSplitSvg = 'assets/svgs/course/course_split.svg';
 }

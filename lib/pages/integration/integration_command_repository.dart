@@ -4,18 +4,36 @@ import 'dart:typed_data';
 import 'models/device_info_config.dart';
 import 'udp_hardware_command.dart';
 
+/// 集成设备支持的基础命令类型
+///
+/// 说明：
+/// - [open] 打开设备
+/// - [close] 关闭设备
+/// - [query] 查询设备状态（通常用于解析开关是否开启）
 enum IntegrationDeviceCommandType {
   open,
   close,
   query,
 }
 
+/// 集成命令存储库
+///
+/// 说明：
+/// - 对上层提供统一的 open/close/query/execute API
+/// - 对下层通过 UDP 发送指令，并返回本次通信的结果（见 [UdpHardwareCommandResult]）
+/// - 内置常用的“构建命令字节”和“解析开关是否开启”工具方法，便于复用
 class IntegrationCommandRepository {
+  /// 创建命令仓库
+  ///
+  /// 说明：
+  /// - 支持注入自定义 [UdpHardwareCommander]，便于测试或替换底层实现
   IntegrationCommandRepository({UdpHardwareCommander? commander})
       : _commander = commander ?? const UdpHardwareCommander();
 
+  /// UDP 指令执行器
   final UdpHardwareCommander _commander;
 
+  /// 发送“打开设备”命令
   Future<UdpHardwareCommandResult> openDevice(
     DeviceInfoConfig config, {
     int? localPort,
@@ -29,6 +47,7 @@ class IntegrationCommandRepository {
     );
   }
 
+  /// 发送“关闭设备”命令
   Future<UdpHardwareCommandResult> closeDevice(
     DeviceInfoConfig config, {
     int? localPort,
@@ -42,6 +61,7 @@ class IntegrationCommandRepository {
     );
   }
 
+  /// 发送“查询设备状态”命令
   Future<UdpHardwareCommandResult> queryDevice(
     DeviceInfoConfig config, {
     int? localPort,
@@ -55,6 +75,12 @@ class IntegrationCommandRepository {
     );
   }
 
+  /// 执行一次设备命令（打开/关闭/查询）
+  ///
+  /// 说明：
+  /// - 会校验设备是否启用，以及 IP/端口/命令文本是否合法
+  /// - 根据 [type] 从配置中选择对应命令，并将其编码为字节后通过 UDP 发送
+  /// - 返回完整的 UDP 执行结果，供上层展示或进一步解析
   Future<UdpHardwareCommandResult> executeDeviceCommand(
     DeviceInfoConfig config, {
     required IntegrationDeviceCommandType type,
@@ -91,6 +117,10 @@ class IntegrationCommandRepository {
       );
     }
 
+    /// 将命令文本转换为实际要发送的字节
+    ///
+    /// 说明：
+    /// - [config.commandBase] 决定按二进制/十六进制解析命令文本，解析失败则回退为普通字符串编码
     final Uint8List bytes = buildCommandBytes(
       command: command,
       commandBase: config.commandBase,
@@ -106,6 +136,11 @@ class IntegrationCommandRepository {
     );
   }
 
+  /// 构建 UDP 指令的字节数据
+  ///
+  /// 说明：
+  /// - 当 [commandBase] 为 2 时：尝试按二进制解析（以空格/逗号/分号分隔），失败则按 [encoding] 编码
+  /// - 否则：尝试按十六进制解析（支持 0x 前缀与多种分隔符），失败则按 [encoding] 编码
   static Uint8List buildCommandBytes({
     required String command,
     required int commandBase,
@@ -118,6 +153,14 @@ class IntegrationCommandRepository {
     return _tryParseHex(command) ?? Uint8List.fromList(encoding.encode(command));
   }
 
+  /// 从一次 UDP 结果中解析“开关是否开启”
+  ///
+  /// 返回：
+  /// - `true/false`：解析成功得到开/关
+  /// - `null`：结果失败或无法解析
+  ///
+  /// 说明：
+  /// - 优先解析字节流（更稳定），其次解析十六进制文本，最后退回到普通文本解析
   static bool? parseSwitchIsOn(UdpHardwareCommandResult result) {
     if (!result.isSuccess) {
       return null;
@@ -140,6 +183,12 @@ class IntegrationCommandRepository {
     return parseSwitchIsOnText(text);
   }
 
+  /// 通过返回的原始字节解析开关状态
+  ///
+  /// 说明：
+  /// - 将字节转大写 HEX 后，按协议关键字判断：
+  ///   - 包含 `7E31` 认为是 ON
+  ///   - 包含 `7E30` 认为是 OFF
   static bool? _parseSwitchIsOnBytes(Uint8List? bytes) {
     if (bytes == null || bytes.isEmpty) {
       return null;
@@ -154,6 +203,13 @@ class IntegrationCommandRepository {
     return null;
   }
 
+  /// 通过十六进制文本解析开关状态
+  ///
+  /// 说明：
+  /// - 会先做规范化（去掉 0x 前缀、去除非 hex 字符、转大写）
+  /// - 按协议关键字判断：
+  ///   - 包含 `7E31` 认为是 ON
+  ///   - 包含 `7E30` 认为是 OFF
   static bool? _parseSwitchIsOnHexText(String text) {
     final String s = _normalizeHexText(text);
     if (s.isEmpty) {
@@ -168,6 +224,12 @@ class IntegrationCommandRepository {
     return null;
   }
 
+  /// 规范化十六进制文本（用于稳定解析）
+  ///
+  /// 规则：
+  /// - 去掉 `0x` 前缀
+  /// - 移除所有非 0-9A-F 字符
+  /// - 转为大写
   static String _normalizeHexText(String text) {
     String s = text.trim();
     if (s.isEmpty) {
@@ -178,6 +240,7 @@ class IntegrationCommandRepository {
     return s.toUpperCase();
   }
 
+  /// 将字节数组转为大写十六进制字符串（无分隔符）
   static String _bytesToUpperHex(Uint8List bytes) {
     final StringBuffer sb = StringBuffer();
     for (final int b in bytes) {
@@ -186,6 +249,11 @@ class IntegrationCommandRepository {
     return sb.toString().toUpperCase();
   }
 
+  /// 从普通文本中解析开关状态
+  ///
+  /// 说明：
+  /// - 优先识别 ON/OFF 字样
+  /// - 其次尝试匹配独立的 2 位 01/00 token（避免误判长数字串）
   static bool? parseSwitchIsOnText(String text) {
     final String s = text.replaceAll(RegExp(r'[\u0000-\u001F]'), ' ').trim();
     if (s.isEmpty) {
@@ -213,6 +281,11 @@ class IntegrationCommandRepository {
     return null;
   }
 
+  /// 尝试按“二进制字节序列”解析命令文本
+  ///
+  /// 示例：
+  /// - "11111111 00000000" -> [0xFF, 0x00]
+  /// - "1,10,11" -> [0x01, 0x02, 0x03]
   static Uint8List? _tryParseBinary(String raw) {
     final String trimmed = raw.trim();
     if (trimmed.isEmpty) {
@@ -239,6 +312,11 @@ class IntegrationCommandRepository {
     return Uint8List.fromList(bytes);
   }
 
+  /// 尝试按“十六进制字符串”解析命令文本
+  ///
+  /// 说明：
+  /// - 支持 `0x` 前缀、空格/逗号/分号/下划线/冒号/短横线等分隔符
+  /// - 若长度为奇数，会自动在前面补 `0`
   static Uint8List? _tryParseHex(String raw) {
     String s = raw.trim();
     if (s.isEmpty) {
@@ -264,6 +342,7 @@ class IntegrationCommandRepository {
     return Uint8List.fromList(bytes);
   }
 
+  /// 根据命令类型获取配置中的命令文本
   String _commandTextByType(DeviceInfoConfig config, IntegrationDeviceCommandType type) {
     switch (type) {
       case IntegrationDeviceCommandType.open:
@@ -275,6 +354,7 @@ class IntegrationCommandRepository {
     }
   }
 
+  /// 构造一个失败的 UDP 结果（用于本地校验失败等场景）
   UdpHardwareCommandResult _errorResult({
     required String ip,
     required String port,

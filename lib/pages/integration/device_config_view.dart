@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../index.dart';
-
+///设备配置视图
+///
+///说明：
+///- 用于显示和编辑设备的基本配置（如 IP 地址、端口号、打开/关闭指令等）
 class DeviceConfigView extends GetView<IntegrationController> {
   const DeviceConfigView({super.key});
 

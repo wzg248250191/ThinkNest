@@ -7,7 +7,6 @@ import '../../../../../index.dart';
 class SingleCourseController extends GetxController {
   SingleCourseController();
 
-  final PcCourseCommandSender _sender = Get.find<PcCourseCommandSender>();
   final PcCourseMessageHandler _handler = Get.find<PcCourseMessageHandler>();
 
   SocketService get _socketService => Get.find<SocketService>();
@@ -22,13 +21,13 @@ class SingleCourseController extends GetxController {
   int wallVolume = 100;
   int deskVolume = 100;
 
-  bool get isWallConnected => _socketService.isWallConnected;
+  bool get isWallConnected => _socketService.isConnected(ServerType.wall);
 
-  bool get isDeskConnected => _socketService.isDesktopConnected;
+  bool get isDeskConnected => _socketService.isConnected(ServerType.desktop);
 
-  String? get wallServerIp => _socketService.connectedWallServerIp.value;
+  String? get wallServerIp => _socketService.connectedServerIp(ServerType.wall).value;
 
-  String? get deskServerIp => _socketService.connectedDesktopServerIp.value;
+  String? get deskServerIp => _socketService.connectedServerIp(ServerType.desktop).value;
 
   @override
   void onInit() {
@@ -87,7 +86,7 @@ class SingleCourseController extends GetxController {
     });
 
     ever<SocketState>(
-      _socketService.wallConnectionState,
+      _socketService.connectionState(ServerType.wall),
       (_) {
         if (courseId != null) {
           update(['course_control_toggle']);
@@ -95,7 +94,7 @@ class SingleCourseController extends GetxController {
       },
     );
     ever<SocketState>(
-      _socketService.desktopConnectionState,
+      _socketService.connectionState(ServerType.desktop),
       (_) {
         if (courseId != null) {
           update(['course_control_toggle']);
@@ -210,6 +209,34 @@ class SingleCourseController extends GetxController {
     update(['type_switch']);
   }
 
+  /// 在指定端（墙面/桌面）开启课程
+  ///
+  /// 说明：
+  /// - 若目标端未连接：触发 ensureConnected（历史 IP 直连 → UDP 扫描兜底 → 建连）
+  /// - 连接成功后：发送开启课程指令
+  Future<bool> _openCourseOn(ServerType serverType, String courseId) async {
+    if (!_socketService.isConnected(serverType)) {
+      final connected = await _socketService.ensureConnected(serverType);
+      if (!connected) {
+        return false;
+      }
+    }
+    _socketService.controlApplication(serverType, courseId, true);
+    return true;
+  }
+
+  /// 在指定端（墙面/桌面）关闭课程
+  ///
+  /// 说明：
+  /// - 关闭时不触发连接/扫描逻辑（符合“关设备不做连接动作”的约束）
+  Future<bool> _closeCourseOn(ServerType serverType, String courseId) async {
+    if (!_socketService.isConnected(serverType)) {
+      return true;
+    }
+    _socketService.controlApplication(serverType, courseId, false);
+    return true;
+  }
+
   Future<void> setWholeEnabled(bool enabled) async {
     final String? id = courseId;
     if (id == null) {
@@ -220,11 +247,11 @@ class SingleCourseController extends GetxController {
     bool deskSuccess;
 
     if (enabled) {
-      wallSuccess = await _sender.openWallCourse(courseId: id);
-      deskSuccess = await _sender.openDeskCourse(courseId: id);
+      wallSuccess = await _openCourseOn(ServerType.wall, id);
+      deskSuccess = await _openCourseOn(ServerType.desktop, id);
     } else {
-      wallSuccess = await _sender.closeWallCourse(courseId: id);
-      deskSuccess = await _sender.closeDeskCourse(courseId: id);
+      wallSuccess = await _closeCourseOn(ServerType.wall, id);
+      deskSuccess = await _closeCourseOn(ServerType.desktop, id);
     }
 
     // 关键修复：主动同步 Handler 状态
@@ -258,7 +285,7 @@ class SingleCourseController extends GetxController {
     }
     bool success;
     if (enabled) {
-      success = await _sender.openWallCourse(courseId: id);
+      success = await _openCourseOn(ServerType.wall, id);
     } else {
       if (!skipConfirm) {
         final bool confirmed = (await AlertDialog.show(
@@ -269,7 +296,7 @@ class SingleCourseController extends GetxController {
           return;
         }
       }
-      success = await _sender.closeWallCourse(courseId: id);
+      success = await _closeCourseOn(ServerType.wall, id);
     }
 
     if (!success) {
@@ -299,7 +326,7 @@ class SingleCourseController extends GetxController {
 
     bool success;
     if (enabled) {
-      success = await _sender.openDeskCourse(courseId: id);
+      success = await _openCourseOn(ServerType.desktop, id);
     } else {
       if (!skipConfirm) {
         final bool confirmed = (await AlertDialog.show(
@@ -310,7 +337,7 @@ class SingleCourseController extends GetxController {
           return;
         }
       }
-      success = await _sender.closeDeskCourse(courseId: id);
+      success = await _closeCourseOn(ServerType.desktop, id);
     }
 
     if (!success) {
@@ -337,15 +364,16 @@ class SingleCourseController extends GetxController {
   }
 
   Future<void> commitWallVolume(int value) async {
-    final String? id = courseId;
-    if (id == null) {
+    if (courseId == null) {
       return;
     }
 
     wallVolume = value.clamp(0, 100);
     update(['volume_slider']);
 
-    await _sender.setWallCourseVolume(volume: wallVolume);
+    if (_socketService.isConnected(ServerType.wall)) {
+      _socketService.setVolume(ServerType.wall, wallVolume);
+    }
   }
 
   void setDeskVolume(int value) {
@@ -354,15 +382,16 @@ class SingleCourseController extends GetxController {
   }
 
   Future<void> commitDeskVolume(int value) async {
-    final String? id = courseId;
-    if (id == null) {
+    if (courseId == null) {
       return;
     }
 
     deskVolume = value.clamp(0, 100);
     update(['volume_slider']);
 
-    await _sender.setDeskCourseVolume(volume: deskVolume);
+    if (_socketService.isConnected(ServerType.desktop)) {
+      _socketService.setVolume(ServerType.desktop, deskVolume);
+    }
   }
 
   @override

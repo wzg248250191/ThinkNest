@@ -42,8 +42,8 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
   late bool _enabled;
   late int _commandBase;
   final List<KeyValueModel<String>> _commandBaseOptions = <KeyValueModel<String>>[
-    KeyValueModel<String>(key: '2', value: '2进制'),
-    KeyValueModel<String>(key: '16', value: '16进制'),
+    KeyValueModel<String>(key: '2', value: '文本(ASCII)'),
+    KeyValueModel<String>(key: '16', value: '十六进制(HEX)'),
   ];
   late final TextEditingController _ipController;
   late final TextEditingController _portController;
@@ -239,8 +239,16 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
       orElse: () => _commandBaseOptions.last,
     );
     final Widget header = <Widget>[
-      TextWidget.label(widget.title, fontSize: 36.sp, color: Colors.red), //名字
-      
+      Flexible(
+        child: TextWidget.label(
+          widget.title,
+          fontSize: 36.sp,
+          color: Colors.red,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      SizedBox(width: 12.w),
       DropdownWidget(
         items: _commandBaseOptions,
         selectedValue: selectedCommandBase,
@@ -248,8 +256,8 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
         fontSize: 24.sp,
         buttonHeight: 44.h,
         itemHeight: 40.h,
-      ).width(180.w),
-
+      ).width(220.w),
+      SizedBox(width: 20.w),
       ToggleWidget(
         firstIcon: ImageWidget.svg(AssetsSvgs.closeSvg),
         secondIcon: ImageWidget.svg(AssetsSvgs.openSvg),

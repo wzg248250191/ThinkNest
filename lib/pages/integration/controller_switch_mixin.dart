@@ -13,14 +13,19 @@ mixin _IntegrationSwitchMixin on GetxController {
   /// 获取指定标题的设备配置（由设备配置 mixin 或宿主类提供）
   DeviceInfoConfig getDeviceConfig(String title);
 
+  final Duration _mainCooldownDuration = const Duration(seconds: 10);
+  DateTime? _mainTurnedOnAt;
+  bool _mainCooldownDialogShowing = false;
+  Timer? _mainCooldownTimer;
+
   /// 一体化页面各开关状态（不可变对象，更新通过 copyWith 生成新对象）
   final Map<IntegrationSwitchType, SwitchCircleState> _switchStates =
       <IntegrationSwitchType, SwitchCircleState>{
     IntegrationSwitchType.main: const SwitchCircleState(enabled: true, isOn: true),
     IntegrationSwitchType.wall: const SwitchCircleState(enabled: true, isOn: false),
     IntegrationSwitchType.desk: const SwitchCircleState(enabled: true, isOn: false),
-    IntegrationSwitchType.light: const SwitchCircleState(enabled: false, isOn: false),
-    IntegrationSwitchType.curtain: const SwitchCircleState(enabled: false, isOn: false),
+    IntegrationSwitchType.light: const SwitchCircleState(enabled: true, isOn: false),
+    IntegrationSwitchType.curtain: const SwitchCircleState(enabled: true, isOn: false),
   };
 
   /// 单个开关当前是否正在下发指令（防止同一开关并发发送）
@@ -44,64 +49,63 @@ mixin _IntegrationSwitchMixin on GetxController {
   /// 对外统一入口：请求切换某个开关到期望状态，并在内部做规则编排
   ///
   /// 规则：
-  /// - 开启非总开关：若总开关未开 → 先开总开关 → 等 10 秒 → 再开目标开关
-  /// - 关闭总开关：先关所有子开关（可并行）→ 全部完成后 → 再关总开关
-  /// - 编排执行期会临时锁定相关开关（blocked=true），避免用户重复点击打断流程
+  /// - 开启墙面/桌面/灯光/窗帘：仅当总开关已开启时才允许开启，否则提示“请先开启总开关”
+  /// - 关闭总开关：仅当墙面/桌面/灯光/窗帘均已关闭时才允许关闭，否则提示“请先关闭...”
   Future<void> requestSwitchChange(IntegrationSwitchType type, bool desiredOn) async {
     final SwitchCircleState current = _mustSwitchState(type);
     if (!current.enabled || current.blocked) {
       return;
     }
 
-    if (type == IntegrationSwitchType.main && !desiredOn) {
-      final List<IntegrationSwitchType> allTypes = IntegrationSwitchType.values.toList();
-      _setBlocked(allTypes, true);
-      _optimisticallySetIsOn(IntegrationSwitchType.main, false);
-      update(<String>["integration"]);
-      try {
-        final List<IntegrationSwitchType> subTypes =
-            allTypes.where((t) => t != IntegrationSwitchType.main).toList();
-        await Future.wait(<Future<void>>[
-          for (final t in subTypes) _toggleSwitch(t, false),
-        ]);
-        await _toggleSwitch(IntegrationSwitchType.main, false);
-      } finally {
-        _setBlocked(allTypes, false);
+    if (type != IntegrationSwitchType.main) {
+      final int remaining = _remainingMainCooldownSeconds();
+      if (remaining > 0) {
+        if (desiredOn != current.isOn) {
+          _optimisticallySetIsOn(type, current.isOn);
+          update(<String>["integration"]);
+        }
+        unawaited(_showMainCooldownDialog());
+        return;
       }
-      return;
     }
 
     if (type != IntegrationSwitchType.main && desiredOn) {
       final SwitchCircleState mainState = _mustSwitchState(IntegrationSwitchType.main);
-      if (!mainState.enabled) {
+      if (!mainState.isOn) {
         _optimisticallySetIsOn(type, false);
         update(<String>["integration"]);
+        ToastUtils.show('请先开启总开关');
+        return;
+      }
+    }
+
+    if (type == IntegrationSwitchType.main && !desiredOn) {
+      final List<IntegrationSwitchType> openedSubs = IntegrationSwitchType.values
+          .where((t) => t != IntegrationSwitchType.main && _mustSwitchState(t).isOn)
+          .toList();
+      if (openedSubs.isNotEmpty) {
+        update(<String>["integration"]);
+        ToastUtils.show('请先关闭${openedSubs.map((e) => e.displayName).join('、')}');
         return;
       }
 
-      if (!mainState.isOn) {
-        final List<IntegrationSwitchType> locked = <IntegrationSwitchType>[
-          IntegrationSwitchType.main,
-          type,
-        ];
-        _setBlocked(locked, true);
-        _optimisticallySetIsOn(IntegrationSwitchType.main, true);
-        _optimisticallySetIsOn(type, true);
-        update(<String>["integration"]);
-        try {
-          await _toggleSwitch(IntegrationSwitchType.main, true);
-          await Future.delayed(const Duration(seconds: 10));
-          if (!_mustSwitchState(IntegrationSwitchType.main).isOn) {
-            _optimisticallySetIsOn(type, false);
-            update(<String>["integration"]);
-            return;
-          }
-          await _toggleSwitch(type, true);
-        } finally {
-          _setBlocked(locked, false);
-        }
-        return;
-      }
+      _optimisticallySetIsOn(type, true);
+      update(<String>["integration"]);
+
+      await Get.dialog<void>(
+        ConfirmDialog(
+          message: '请检查所有设备是否已经关闭，\n如有设备未关闭强制断电可能会对设备造成一定的损坏，\n请谨慎使用',
+          leftText: '取消',
+          rightText: '确定',
+          height: 320.h,
+          onRightTap: () async {
+            await _toggleSwitch(type, false);
+          },
+        ),
+        barrierDismissible: false,
+        barrierColor: Colors.black.withValues(alpha: 0.5),
+      );
+      return;
     }
 
     await _toggleSwitch(type, desiredOn);
@@ -116,22 +120,6 @@ mixin _IntegrationSwitchMixin on GetxController {
     _setSwitchState(type, cur.copyWith(isOn: desiredOn));
   }
 
-  /// 批量设置 blocked（用于编排执行期禁用点击）
-  void _setBlocked(Iterable<IntegrationSwitchType> types, bool blocked) {
-    bool changed = false;
-    for (final t in types) {
-      final SwitchCircleState cur = _mustSwitchState(t);
-      if (cur.blocked == blocked) {
-        continue;
-      }
-      _setSwitchState(t, cur.copyWith(blocked: blocked));
-      changed = true;
-    }
-    if (changed) {
-      update(<String>["integration"]);
-    }
-  }
-
   /// 获取内部保存的状态（保证非空）
   SwitchCircleState _mustSwitchState(IntegrationSwitchType type) {
     return _switchStates[type] ?? const SwitchCircleState(enabled: false, isOn: false);
@@ -139,7 +127,137 @@ mixin _IntegrationSwitchMixin on GetxController {
 
   /// 更新内部保存的状态（不可变更新：替换为新对象）
   void _setSwitchState(IntegrationSwitchType type, SwitchCircleState next) {
+    final SwitchCircleState? prev = _switchStates[type];
+    if (type == IntegrationSwitchType.main) {
+      final bool prevOn = prev?.isOn ?? false;
+      if (!prevOn && next.isOn) {
+        _mainTurnedOnAt = DateTime.now();
+      }
+      if (prevOn && !next.isOn) {
+        _mainTurnedOnAt = null;
+        _dismissMainCooldownDialog();
+      }
+    }
     _switchStates[type] = next;
+  }
+
+  int _remainingMainCooldownSeconds() {
+    final DateTime? turnedOnAt = _mainTurnedOnAt;
+    if (turnedOnAt == null) {
+      return 0;
+    }
+    if (!_mustSwitchState(IntegrationSwitchType.main).isOn) {
+      return 0;
+    }
+    final Duration elapsed = DateTime.now().difference(turnedOnAt);
+    final Duration remaining = _mainCooldownDuration - elapsed;
+    if (remaining <= Duration.zero) {
+      return 0;
+    }
+    final int seconds = (remaining.inMilliseconds / 1000).ceil();
+    return seconds < 0 ? 0 : seconds;
+  }
+
+  Future<void> _showMainCooldownDialog() async {
+    if (_mainCooldownDialogShowing) {
+      return;
+    }
+    final int initial = _remainingMainCooldownSeconds();
+    if (initial <= 0) {
+      return;
+    }
+
+    _mainCooldownDialogShowing = true;
+    int remaining = initial;
+    try {
+      await Get.dialog<void>(
+        StatefulBuilder(
+          builder: (context, setState) {
+            _mainCooldownTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+              final int next = _remainingMainCooldownSeconds();
+              if (next <= 0) {
+                _dismissMainCooldownDialog();
+                return;
+              }
+              if (next != remaining) {
+                remaining = next;
+                setState(() {});
+              }
+            });
+
+            final message = '等待设备预处理，还需 $remaining 秒才能操作';
+            final messageStyle = TextStyle(
+              fontSize: 28.sp,
+              fontWeight: FontWeight.w400,
+              color: CustomAppColors.text,
+              decoration: TextDecoration.none,
+            );
+            final resolvedStyle = DefaultTextStyle.of(context).style.merge(messageStyle);
+            const double containerPaddingH = 5.0;
+           // 1. 先测单行所需宽度
+            final painter = TextPainter(
+              text: TextSpan(text: message, style: resolvedStyle),
+              textDirection: Directionality.of(context),
+              locale: Localizations.localeOf(context),
+              maxLines: 1,// 单行
+              textAlign: TextAlign.center,
+              textScaler: MediaQuery.textScalerOf(context),
+            )..layout();// 不限制 maxWidth，拿自然宽度
+            //弹窗宽度 = 单行宽度 + 实际 padding，总体再做 clamp
+            final dialogWidth = (painter.width + (containerPaddingH.w * 2))
+                .clamp(500.w, 1200.w)
+                .toDouble();
+
+            return <Widget>[
+                  Icon(
+                    Icons.info_outline,
+                    size: 44.sp,
+                    color: CustomAppColors.primary,
+                  ).paddingOnly(top: 28.h),
+                  TextWidget.label(
+                    message,
+                    textAlign: TextAlign.center,
+                    fontSize: 28.sp,
+                    color: CustomAppColors.text,
+                    weight: FontWeight.w400,
+                    textStyle: const TextStyle(decoration: TextDecoration.none),
+                  ).padding(horizontal: containerPaddingH.w, vertical: 20.h),
+                  SizedBox(height: 22.h),
+                  ButtonWidget.ghost(
+                    '确定',
+                    fontSize: 28.sp,
+                    width: double.infinity,
+                    onTap: _dismissMainCooldownDialog,
+                  ),
+                ].toColumn(mainAxisSize: MainAxisSize.min)
+                .constrained(
+                  width: dialogWidth,
+                  minHeight: 200.h,
+                  maxHeight: 620.h,
+                )
+                .decorated(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ).center();
+                
+          },
+        ),
+        barrierDismissible: false,
+        barrierColor: Colors.black.withValues(alpha: 0.3),
+      );
+    } finally {
+      _mainCooldownDialogShowing = false;
+      _mainCooldownTimer?.cancel();
+      _mainCooldownTimer = null;
+    }
+  }
+
+  void _dismissMainCooldownDialog() {
+    _mainCooldownTimer?.cancel();
+    _mainCooldownTimer = null;
+    if (_mainCooldownDialogShowing && (Get.isDialogOpen ?? false)) {
+      Get.back<void>();
+    }
   }
 
   /// 执行一次开关对应的设备命令（打开/关闭/查询）

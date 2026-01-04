@@ -267,11 +267,16 @@ class TextWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final themeTextStyle = theme.textTheme.bodyMedium;
     final baseStyle = TextStyle(
       color: _color(context),
       fontSize: _fontSize(),
       fontWeight: weight,
       fontStyle: fontStyle,
+      fontFamily: themeTextStyle?.fontFamily,
+      fontFamilyFallback: themeTextStyle?.fontFamilyFallback,
+      decoration: TextDecoration.none,
     ).merge(textStyle);
 
     final span = inlineSpan;

@@ -63,6 +63,7 @@ class CustomAppColors {
   static const Color border = Color(0xFFDFE4EA);
   static const Color text = Color(0xFF1B1C1F);
   static const Color subText = Color(0xFF55606D);
+  static const Color buttonLight = Colors.blueAccent;
 }
 
 class CustomAppRadius {

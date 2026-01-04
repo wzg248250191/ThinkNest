@@ -64,7 +64,12 @@ class DropdownWidget extends StatelessWidget {
         hint: Row(
           children: [
             Expanded(
-              child: TextWidget.label(hintText ?? 'Select Item', fontSize: fontSize),
+              child: TextWidget.label(
+                hintText ?? 'Select Item',
+                fontSize: fontSize,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -72,9 +77,33 @@ class DropdownWidget extends StatelessWidget {
         items: items
             ?.map((item) => DropdownMenuItem<KeyValueModel>(
                   value: item,
-                  child: TextWidget.label(item.value, fontSize: fontSize),
+                  child: TextWidget.label(
+                    item.value,
+                    fontSize: fontSize,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ))
             .toList(),
+        selectedItemBuilder: (context) {
+          final list = items;
+          if (list == null) {
+            return const <Widget>[];
+          }
+          return list
+              .map(
+                (item) => Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextWidget.label(
+                    item.value,
+                    fontSize: fontSize,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList();
+        },
         // 选中项
         value: selectedValue,
         // 改变事件

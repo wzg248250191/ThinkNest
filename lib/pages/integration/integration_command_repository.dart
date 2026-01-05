@@ -120,7 +120,9 @@ class IntegrationCommandRepository {
     /// 将命令文本转换为实际要发送的字节
     ///
     /// 说明：
-    /// - [config.commandBase] 决定按二进制/十六进制解析命令文本，解析失败则回退为普通字符串编码
+    /// - [config.commandBase] 决定以“字符字节”或“十六进制字节”发送命令：
+    ///   - `2`：按字符编码直接转为字节数组发送（与 Unity 的 byte[] 行为对齐）
+    ///   - 其他：优先按十六进制字符串解析为字节数组，失败则回退为字符编码
     final Uint8List bytes = buildCommandBytes(
       command: command,
       commandBase: config.commandBase,
@@ -139,16 +141,15 @@ class IntegrationCommandRepository {
   /// 构建 UDP 指令的字节数据
   ///
   /// 说明：
-  /// - 当 [commandBase] 为 2 时：尝试按二进制解析（以空格/逗号/分号分隔），失败则按 [encoding] 编码
-  /// - 否则：尝试按十六进制解析（支持 0x 前缀与多种分隔符），失败则按 [encoding] 编码
+  /// - 当 [commandBase] 为 2 时：按字符编码直接转为字节数组
+  /// - 否则：尝试按十六进制解析（支持 0x 前缀与多种分隔符），失败则按字符编码转字节数组
   static Uint8List buildCommandBytes({
     required String command,
     required int commandBase,
     Encoding encoding = latin1,
   }) {
-    final int base = commandBase == 2 ? 2 : 16;
-    if (base == 2) {
-      return _tryParseBinary(command) ?? Uint8List.fromList(encoding.encode(command));
+    if (commandBase == 2) {
+      return Uint8List.fromList(encoding.encode(command));
     }
     return _tryParseHex(command) ?? Uint8List.fromList(encoding.encode(command));
   }
@@ -279,37 +280,6 @@ class IntegrationCommandRepository {
       return false;
     }
     return null;
-  }
-
-  /// 尝试按“二进制字节序列”解析命令文本
-  ///
-  /// 示例：
-  /// - "11111111 00000000" -> [0xFF, 0x00]
-  /// - "1,10,11" -> [0x01, 0x02, 0x03]
-  static Uint8List? _tryParseBinary(String raw) {
-    final String trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return Uint8List(0);
-    }
-
-    final List<String> parts = trimmed.split(RegExp(r'[\s,;]+')).where((e) => e.isNotEmpty).toList();
-    if (parts.isEmpty) {
-      return Uint8List(0);
-    }
-
-    final List<int> bytes = <int>[];
-    for (final part in parts) {
-      final String p = part.trim();
-      if (!RegExp(r'^[01]+$').hasMatch(p)) {
-        return null;
-      }
-      final int value = int.parse(p, radix: 2);
-      if (value < 0 || value > 255) {
-        return null;
-      }
-      bytes.add(value);
-    }
-    return Uint8List.fromList(bytes);
   }
 
   /// 尝试按“十六进制字符串”解析命令文本

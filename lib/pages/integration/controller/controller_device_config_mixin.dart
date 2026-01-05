@@ -1,4 +1,4 @@
-part of 'controller.dart';
+part of '../controller.dart';
 
 /// 一体化页面“设备配置”能力集合
 ///
@@ -30,7 +30,7 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     deviceConfigs[title] = config;
     await _persistDeviceConfigs();
     syncEnabledFromDeviceConfigs();
-    update(<String>["device_config"]);
+    update(kDeviceConfigUpdateIds);
   }
 
   /// 读取本地“设备配置”
@@ -48,7 +48,7 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
               .map((t) => MapEntry<String, DeviceInfoConfig>(t, const DeviceInfoConfig())),
         );
       syncEnabledFromDeviceConfigs();
-      update(<String>["device_config"]);
+      update(kDeviceConfigUpdateIds);
       return;
     }
 
@@ -73,7 +73,7 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     }
 
     syncEnabledFromDeviceConfigs();
-    update(<String>["device_config"]);
+    update(kDeviceConfigUpdateIds);
   }
 
   /// 将当前 `deviceConfigs` 序列化并写入本地存储（用于应用下次启动恢复配置）。

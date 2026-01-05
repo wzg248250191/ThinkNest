@@ -21,12 +21,12 @@ void main() {
     expect(bytes, <int>[0x0A]);
   });
 
-  test('buildCommandBytes parses binary tokens', () {
+  test('buildCommandBytes encodes text when commandBase is 2', () {
     final bytes = IntegrationCommandRepository.buildCommandBytes(
-      command: '00000001 00000010 11111111',
+      command: 'ABC',
       commandBase: 2,
     );
-    expect(bytes, <int>[1, 2, 255]);
+    expect(bytes, <int>[65, 66, 67]);
   });
 
   test('buildCommandBytes falls back to text on invalid input', () {

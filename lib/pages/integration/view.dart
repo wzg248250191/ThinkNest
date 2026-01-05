@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:think_nest/common/index.dart';
 
-import 'device_config_view.dart';
 import 'index.dart';
 
 class IntegrationPage extends GetView<IntegrationController> {
@@ -91,7 +90,7 @@ class IntegrationPage extends GetView<IntegrationController> {
             child: Container(
               width: 120.w,
               height: 120.w,
-              color: Colors.red,
+              color: AppTheme.error,
             ),
           ),
         ),
@@ -114,7 +113,7 @@ class IntegrationPage extends GetView<IntegrationController> {
   @override
   Widget build(BuildContext context) {
     return GetBuilder<IntegrationController>(
-      id: "integration",
+      id: kIntegrationGetBuilderId,
       builder: (_) {
         return  Scaffold(
             appBar: AppbarWidget(

@@ -11,12 +11,14 @@ class ActiveCourseModel {
   final bool wallEnabled;
   final bool deskEnabled;
   final bool doubleControl;
+  final int savedAtMs;
 
   ActiveCourseModel({
     required this.courseId,
     required this.wallEnabled,
     required this.deskEnabled,
     this.doubleControl = false,
+    required this.savedAtMs,
   });
 
   Map<String, dynamic> toJson() => {
@@ -24,6 +26,7 @@ class ActiveCourseModel {
     'wallEnabled': wallEnabled,
     'deskEnabled': deskEnabled,
     'doubleControl': doubleControl,
+    'savedAtMs': savedAtMs,
   };
 
   factory ActiveCourseModel.fromJson(Map<String, dynamic> json) {
@@ -32,8 +35,20 @@ class ActiveCourseModel {
       wallEnabled: json['wallEnabled'] ?? false,
       deskEnabled: json['deskEnabled'] ?? false,
       doubleControl: json['doubleControl'] ?? false,
+      savedAtMs: _parseInt(json['savedAtMs']),
     );
   }
+}
+
+int _parseInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? 0;
+  return 0;
+}
+
+bool _isSameLocalDay(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 class PcCourseMessageHandler extends GetxService {
@@ -85,6 +100,26 @@ class PcCourseMessageHandler extends GetxService {
         final Map<String, dynamic> jsonMap = jsonDecode(jsonStr);
         final model = ActiveCourseModel.fromJson(jsonMap);
 
+        final now = DateTime.now();
+        final savedAtMs = model.savedAtMs;
+        if (savedAtMs <= 0) {
+          _storage.remove(_storageKey);
+          currentCourseId.value = null;
+          wallCourseEnabled.value = false;
+          deskCourseEnabled.value = false;
+          isWallDoubleControl.value = false;
+          return;
+        }
+        final savedAt = DateTime.fromMillisecondsSinceEpoch(savedAtMs);
+        if (!_isSameLocalDay(savedAt, now)) {
+          _storage.remove(_storageKey);
+          currentCourseId.value = null;
+          wallCourseEnabled.value = false;
+          deskCourseEnabled.value = false;
+          isWallDoubleControl.value = false;
+          return;
+        }
+
         print('📦 恢复课程状态: ${model.courseId}, 墙面: ${model.wallEnabled}, 桌面: ${model.deskEnabled}, 双控: ${model.doubleControl}');
 
         // 恢复数据
@@ -120,6 +155,7 @@ class PcCourseMessageHandler extends GetxService {
       wallEnabled: wall,
       deskEnabled: desk,
       doubleControl: doubleCtrl,
+      savedAtMs: DateTime.now().millisecondsSinceEpoch,
     );
     
     // 使用 setJson (实际上是 setString + jsonEncode)

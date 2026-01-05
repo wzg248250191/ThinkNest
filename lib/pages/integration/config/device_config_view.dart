@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../index.dart';
+
 ///设备配置视图
 ///
 ///说明：
@@ -17,7 +18,7 @@ class DeviceConfigView extends GetView<IntegrationController> {
 
   Widget _buildView() {
     return GetBuilder<IntegrationController>(
-      id: 'device_config',
+      id: kDeviceConfigGetBuilderId,
       builder: (_) {
         final titles = IntegrationController.deviceTitles;
         return ListView.separated(

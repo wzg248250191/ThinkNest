@@ -1,45 +1,18 @@
-part of 'controller.dart';
+part of '../controller.dart';
 
-/// 一体化页面“开关业务”能力集合
+/// 一体化页面“开关业务编排与硬件交互”能力集合
 ///
 /// 说明：
-/// - 维护 UI 层展示的开关状态（enabled/isOn）
-/// - 将一个逻辑开关映射到一个或多个真实设备配置，并下发 UDP 开/关/查询指令
-/// - 处理乐观更新、忙碌态、防抖补发、以及墙面/桌面开机后的服务器连接等待与重试
-mixin _IntegrationSwitchMixin on GetxController {
-  /// 命令仓库（负责把配置转为 UDP 指令并发送）
+/// - 处理 UI 层开关点击回调与业务规则（主开关约束/关闭确认/冷却期限制等）
+/// - 将逻辑开关映射到设备配置集合并下发 UDP 指令（开/关/查询）
+/// - 处理并发与补发（同一开关忙碌时记录最后一次期望）
+/// - 对墙面/桌面开机后等待 PC 服务端启动并尝试连接
+mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateMixin, _IntegrationSwitchCooldownMixin {
+  /// 指令仓库（负责把配置转为 UDP 指令并发送）
   IntegrationCommandRepository get commandRepository;
 
-  /// 获取指定标题的设备配置（由设备配置 mixin 或宿主类提供）
+  /// 按标题获取设备配置（由设备配置 mixin 或宿主类提供）
   DeviceInfoConfig getDeviceConfig(String title);
-
-  final Duration _mainCooldownDuration = const Duration(seconds: 10);
-  DateTime? _mainTurnedOnAt;
-  bool _mainCooldownDialogShowing = false;
-  Timer? _mainCooldownTimer;
-
-  /// 一体化页面各开关状态（不可变对象，更新通过 copyWith 生成新对象）
-  final Map<IntegrationSwitchType, SwitchCircleState> _switchStates =
-      <IntegrationSwitchType, SwitchCircleState>{
-    IntegrationSwitchType.main: const SwitchCircleState(enabled: true, isOn: true),
-    IntegrationSwitchType.wall: const SwitchCircleState(enabled: true, isOn: false),
-    IntegrationSwitchType.desk: const SwitchCircleState(enabled: true, isOn: false),
-    IntegrationSwitchType.light: const SwitchCircleState(enabled: true, isOn: false),
-    IntegrationSwitchType.curtain: const SwitchCircleState(enabled: true, isOn: false),
-  };
-
-  /// 单个开关当前是否正在下发指令（防止同一开关并发发送）
-  final Map<IntegrationSwitchType, bool> _busy = <IntegrationSwitchType, bool>{
-    for (final t in IntegrationSwitchType.values) t: false,
-  };
-
-  /// 当开关忙碌时，记录用户最后一次期望状态（待忙碌结束后补发）
-  final Map<IntegrationSwitchType, bool?> _pendingDesired = <IntegrationSwitchType, bool?>{};
-
-  /// 获取指定类型的开关状态（供 UI 读取）
-  SwitchCircleState switchState(IntegrationSwitchType type) {
-    return _switchStates[type] ?? const SwitchCircleState(enabled: false, isOn: false);
-  }
 
   /// UI 回调：当某个开关状态改变时触发
   void onSwitchStateChanged(IntegrationSwitchType type, SwitchCircleState value) {
@@ -51,6 +24,7 @@ mixin _IntegrationSwitchMixin on GetxController {
   /// 规则：
   /// - 开启墙面/桌面/灯光/窗帘：仅当总开关已开启时才允许开启，否则提示“请先开启总开关”
   /// - 关闭总开关：仅当墙面/桌面/灯光/窗帘均已关闭时才允许关闭，否则提示“请先关闭...”
+  /// - 冷却期限制：总开关开启后的一段时间内，不允许操作子开关，弹窗提示剩余时间
   Future<void> requestSwitchChange(IntegrationSwitchType type, bool desiredOn) async {
     final SwitchCircleState current = _mustSwitchState(type);
     if (!current.enabled || current.blocked) {
@@ -62,7 +36,7 @@ mixin _IntegrationSwitchMixin on GetxController {
       if (remaining > 0) {
         if (desiredOn != current.isOn) {
           _optimisticallySetIsOn(type, current.isOn);
-          update(<String>["integration"]);
+          update(kIntegrationUpdateIds);
         }
         unawaited(_showMainCooldownDialog());
         return;
@@ -73,7 +47,7 @@ mixin _IntegrationSwitchMixin on GetxController {
       final SwitchCircleState mainState = _mustSwitchState(IntegrationSwitchType.main);
       if (!mainState.isOn) {
         _optimisticallySetIsOn(type, false);
-        update(<String>["integration"]);
+        update(kIntegrationUpdateIds);
         ToastUtils.show('请先开启总开关');
         return;
       }
@@ -84,13 +58,13 @@ mixin _IntegrationSwitchMixin on GetxController {
           .where((t) => t != IntegrationSwitchType.main && _mustSwitchState(t).isOn)
           .toList();
       if (openedSubs.isNotEmpty) {
-        update(<String>["integration"]);
+        update(kIntegrationUpdateIds);
         ToastUtils.show('请先关闭${openedSubs.map((e) => e.displayName).join('、')}');
         return;
       }
 
       _optimisticallySetIsOn(type, true);
-      update(<String>["integration"]);
+      update(kIntegrationUpdateIds);
 
       await Get.dialog<void>(
         ConfirmDialog(
@@ -120,146 +94,6 @@ mixin _IntegrationSwitchMixin on GetxController {
     _setSwitchState(type, cur.copyWith(isOn: desiredOn));
   }
 
-  /// 获取内部保存的状态（保证非空）
-  SwitchCircleState _mustSwitchState(IntegrationSwitchType type) {
-    return _switchStates[type] ?? const SwitchCircleState(enabled: false, isOn: false);
-  }
-
-  /// 更新内部保存的状态（不可变更新：替换为新对象）
-  void _setSwitchState(IntegrationSwitchType type, SwitchCircleState next) {
-    final SwitchCircleState? prev = _switchStates[type];
-    if (type == IntegrationSwitchType.main) {
-      final bool prevOn = prev?.isOn ?? false;
-      if (!prevOn && next.isOn) {
-        _mainTurnedOnAt = DateTime.now();
-      }
-      if (prevOn && !next.isOn) {
-        _mainTurnedOnAt = null;
-        _dismissMainCooldownDialog();
-      }
-    }
-    _switchStates[type] = next;
-  }
-
-  int _remainingMainCooldownSeconds() {
-    final DateTime? turnedOnAt = _mainTurnedOnAt;
-    if (turnedOnAt == null) {
-      return 0;
-    }
-    if (!_mustSwitchState(IntegrationSwitchType.main).isOn) {
-      return 0;
-    }
-    final Duration elapsed = DateTime.now().difference(turnedOnAt);
-    final Duration remaining = _mainCooldownDuration - elapsed;
-    if (remaining <= Duration.zero) {
-      return 0;
-    }
-    final int seconds = (remaining.inMilliseconds / 1000).ceil();
-    return seconds < 0 ? 0 : seconds;
-  }
-
-  Future<void> _showMainCooldownDialog() async {
-    if (_mainCooldownDialogShowing) {
-      return;
-    }
-    final int initial = _remainingMainCooldownSeconds();
-    if (initial <= 0) {
-      return;
-    }
-
-    _mainCooldownDialogShowing = true;
-    int remaining = initial;
-    try {
-      await Get.dialog<void>(
-        StatefulBuilder(
-          builder: (context, setState) {
-            _mainCooldownTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
-              final int next = _remainingMainCooldownSeconds();
-              if (next <= 0) {
-                _dismissMainCooldownDialog();
-                return;
-              }
-              if (next != remaining) {
-                remaining = next;
-                setState(() {});
-              }
-            });
-
-            final message = '等待设备预处理，还需 $remaining 秒才能操作';
-            final messageStyle = TextStyle(
-              fontSize: 28.sp,
-              fontWeight: FontWeight.w400,
-              color: CustomAppColors.text,
-              decoration: TextDecoration.none,
-            );
-            final resolvedStyle = DefaultTextStyle.of(context).style.merge(messageStyle);
-            const double containerPaddingH = 5.0;
-           // 1. 先测单行所需宽度
-            final painter = TextPainter(
-              text: TextSpan(text: message, style: resolvedStyle),
-              textDirection: Directionality.of(context),
-              locale: Localizations.localeOf(context),
-              maxLines: 1,// 单行
-              textAlign: TextAlign.center,
-              textScaler: MediaQuery.textScalerOf(context),
-            )..layout();// 不限制 maxWidth，拿自然宽度
-            //弹窗宽度 = 单行宽度 + 实际 padding，总体再做 clamp
-            final dialogWidth = (painter.width + (containerPaddingH.w * 2))
-                .clamp(500.w, 1200.w)
-                .toDouble();
-
-            return <Widget>[
-                  Icon(
-                    Icons.info_outline,
-                    size: 44.sp,
-                    color: CustomAppColors.primary,
-                  ).paddingOnly(top: 28.h),
-                  TextWidget.label(
-                    message,
-                    textAlign: TextAlign.center,
-                    fontSize: 28.sp,
-                    color: CustomAppColors.text,
-                    weight: FontWeight.w400,
-                    textStyle: const TextStyle(decoration: TextDecoration.none),
-                  ).padding(horizontal: containerPaddingH.w, vertical: 20.h),
-                  SizedBox(height: 22.h),
-                  ButtonWidget.ghost(
-                    '确定',
-                    fontSize: 28.sp,
-                    width: double.infinity,
-                    onTap: _dismissMainCooldownDialog,
-                  ),
-                ].toColumn(mainAxisSize: MainAxisSize.min)
-                .constrained(
-                  width: dialogWidth,
-                  minHeight: 200.h,
-                  maxHeight: 620.h,
-                )
-                .decorated(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ).center();
-                
-          },
-        ),
-        barrierDismissible: false,
-        barrierColor: Colors.black.withValues(alpha: 0.3),
-      );
-    } finally {
-      _mainCooldownDialogShowing = false;
-      _mainCooldownTimer?.cancel();
-      _mainCooldownTimer = null;
-    }
-  }
-
-  void _dismissMainCooldownDialog() {
-    _mainCooldownTimer?.cancel();
-    _mainCooldownTimer = null;
-    if (_mainCooldownDialogShowing && (Get.isDialogOpen ?? false)) {
-      Get.back<void>();
-    }
-  }
-
   /// 执行一次开关对应的设备命令（打开/关闭/查询）
   ///
   /// 返回：
@@ -269,9 +103,58 @@ mixin _IntegrationSwitchMixin on GetxController {
     required IntegrationDeviceCommandType commandType,
     Duration? timeout,
   }) async {
-    final List<DeviceInfoConfig> configs = _deviceConfigsOfSwitch(switchType);
+    final List<MapEntry<String, DeviceInfoConfig>> entries = _deviceConfigEntriesOfSwitch(switchType);
+    final List<UdpHardwareCommandResult?> results =
+        List<UdpHardwareCommandResult?>.filled(entries.length, null);
+
+    final bool isWallOrDesk = switchType == IntegrationSwitchType.wall || switchType == IntegrationSwitchType.desk;
+    final bool isOpenOrClose =
+        commandType == IntegrationDeviceCommandType.open || commandType == IntegrationDeviceCommandType.close;
+
+    if (isWallOrDesk && isOpenOrClose) {
+      final List<int> hostIndexes = <int>[];
+      final List<int> nonHostIndexes = <int>[];
+      for (int i = 0; i < entries.length; i++) {
+        final String title = entries[i].key;
+        if (title.contains('主机')) {
+          hostIndexes.add(i);
+        } else {
+          nonHostIndexes.add(i);
+        }
+      }
+
+      Future<void> runIndexes(List<int> indexes) async {
+        if (indexes.isEmpty) {
+          return;
+        }
+        await Future.wait(<Future<void>>[
+          for (final i in indexes)
+            () async {
+              results[i] = await _executeSingleDevice(entries[i].value, commandType, timeout: timeout);
+            }(),
+        ]);
+      }
+
+      final Duration delay = const Duration(seconds: 10);
+      if (commandType == IntegrationDeviceCommandType.open) {
+        await runIndexes(nonHostIndexes);
+        if (nonHostIndexes.isNotEmpty && hostIndexes.isNotEmpty) {
+          await Future.delayed(delay);
+        }
+        await runIndexes(hostIndexes);
+      } else {
+        await runIndexes(hostIndexes);
+        if (nonHostIndexes.isNotEmpty && hostIndexes.isNotEmpty) {
+          await Future.delayed(delay);
+        }
+        await runIndexes(nonHostIndexes);
+      }
+
+      return results.whereType<UdpHardwareCommandResult>().toList();
+    }
+
     final List<Future<UdpHardwareCommandResult>> tasks = <Future<UdpHardwareCommandResult>>[
-      for (final cfg in configs) _executeSingleDevice(cfg, commandType, timeout: timeout),
+      for (final e in entries) _executeSingleDevice(e.value, commandType, timeout: timeout),
     ];
     return Future.wait(tasks);
   }
@@ -299,6 +182,20 @@ mixin _IntegrationSwitchMixin on GetxController {
     ];
   }
 
+  List<MapEntry<String, DeviceInfoConfig>> _deviceConfigEntriesOfSwitch(IntegrationSwitchType type) {
+    return <MapEntry<String, DeviceInfoConfig>>[
+      for (final title in type.deviceConfigTitles) MapEntry<String, DeviceInfoConfig>(title, getDeviceConfig(title)),
+    ];
+  }
+
+  bool _hasQueryCommandForSwitch(IntegrationSwitchType type) {
+    final List<DeviceInfoConfig> configs = _deviceConfigsOfSwitch(type);
+    if (configs.isEmpty) {
+      return false;
+    }
+    return configs.every((cfg) => cfg.queryCmd.trim().isNotEmpty);
+  }
+
   /// 从硬件查询各开关当前状态，并刷新到 UI
   ///
   /// 说明：
@@ -310,7 +207,9 @@ mixin _IntegrationSwitchMixin on GetxController {
     for (final type in IntegrationSwitchType.values) {
       final SwitchCircleState current = _mustSwitchState(type);
       if (current.enabled) {
-        tasks.add(_refreshSwitch(type, timeout: timeout));
+        if (_hasQueryCommandForSwitch(type)) {
+          tasks.add(_refreshSwitch(type, timeout: timeout));
+        }
       } else {
         _setSwitchState(type, current.copyWith(isOn: false));
       }
@@ -319,7 +218,7 @@ mixin _IntegrationSwitchMixin on GetxController {
     if (tasks.isNotEmpty) {
       await Future.wait(tasks);
     }
-    update(<String>["integration"]);
+    update(kIntegrationUpdateIds);
   }
 
   /// 根据本地“设备配置”的启用状态，刷新一体化页面各开关的 `enabled`（不改变 `isOn`）。
@@ -330,7 +229,7 @@ mixin _IntegrationSwitchMixin on GetxController {
       _setSwitchState(type, current.copyWith(enabled: enabled));
     }
 
-    update(<String>["integration"]);
+    update(kIntegrationUpdateIds);
   }
 
   /// 将“逻辑开关类型”映射到需要连接的 PC 服务器类型（仅墙面/桌面需要）
@@ -400,7 +299,7 @@ mixin _IntegrationSwitchMixin on GetxController {
 
     if (current.isOn != desiredOn) {
       _setSwitchState(type, current.copyWith(isOn: desiredOn));
-      update(<String>["integration"]);
+      update(kIntegrationUpdateIds);
     }
 
     if (_busy[type] == true) {
@@ -441,13 +340,22 @@ mixin _IntegrationSwitchMixin on GetxController {
   /// 规则：
   /// - 只要该开关关联的任一设备无法解析为 true，则认为该开关为关闭
   Future<void> _refreshSwitch(IntegrationSwitchType type, {Duration? timeout}) async {
+    if (!_hasQueryCommandForSwitch(type)) {
+      return;
+    }
     final List<UdpHardwareCommandResult> results = await executeSwitchCommand(
       type,
       commandType: IntegrationDeviceCommandType.query,
       timeout: timeout,
     );
     final List<bool?> states = results.map(IntegrationCommandRepository.parseSwitchIsOn).toList();
-    final bool isOn = states.isNotEmpty && states.every((e) => e == true);
+    if (states.isEmpty) {
+      return;
+    }
+    if (states.any((e) => e == null)) {
+      return;
+    }
+    final bool isOn = states.every((e) => e == true);
     final SwitchCircleState current = _mustSwitchState(type);
     _setSwitchState(type, current.copyWith(isOn: isOn));
   }

@@ -1,4 +1,4 @@
-part of 'controller.dart';
+part of '../controller.dart';
 
 /// 一体化页面的“分页/配置页切换”能力集合
 ///
@@ -54,7 +54,7 @@ mixin _IntegrationPageMixin on GetxController {
       curve: Curves.easeInOut,
     );
     isConfig = true;
-    update(["integration"]);
+    update(kIntegrationUpdateIds);
   }
 
   /// 关闭“设备配置”页（切回入口页 index=0）
@@ -66,17 +66,17 @@ mixin _IntegrationPageMixin on GetxController {
       curve: Curves.easeInOut,
     );
     isConfig = false;
-    update(["integration"]);
+    update(kIntegrationUpdateIds);
   }
 
   /// PageView 页切换回调（用于同步 [isConfig]）
   void onInnerPageChanged(int index) {
     isConfig = index == 1;
-    update(["integration"]);
+    update(kIntegrationUpdateIds);
   }
 
   /// 初始化入口页所需状态
   _initData() {
-    update(["integration"]);
+    update(kIntegrationUpdateIds);
   }
 }

@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 
-import '../../../common/index.dart';
-import '../models/device_info_config.dart';
+import '../../../../common/index.dart';
+import '../../../index.dart';
+
 
 ///设备信息项
 ///
@@ -23,14 +24,14 @@ class DeviceInfoItem extends StatefulWidget {
     this.queryCmd,
     this.onChanged,
   });
-  
+
   final String title;//名字
   final bool enabled;//是否启用
   final int commandBase;//命令进制（2 或 16）
   final String? ip;//ip地址
   final String? port;//端口号
   final String? openCmd;//打开指令
-  final String? closeCmd;//关闭指令  
+  final String? closeCmd;//关闭指令
   final String? queryCmd;//查询指令
   final ValueChanged<DeviceInfoConfig>? onChanged;
 
@@ -243,7 +244,7 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
         child: TextWidget.label(
           widget.title,
           fontSize: 36.sp,
-          color: Colors.red,
+          color: AppTheme.error,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -345,7 +346,7 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
       child: content,
     );
   }
- 
+
   Widget _buildInfoItem(
     String label, {
     required TextEditingController controller,
@@ -353,7 +354,7 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
     bool readOnly = false,
   }) {
     return <Widget>[
-        TextWidget.label('$label:', fontSize: 26.sp).constrained(width: 150.w),
+        TextWidget.label('$label:', fontSize: 26.sp).constrained(width: 120.w),
         InputWidget(
           controller: controller,
           placeholder: placeholder,
@@ -361,6 +362,6 @@ class _DeviceInfoItemState extends State<DeviceInfoItem> {
           borderWidth: 2.w,
           focusBorderWidth: 2.w,
         ).expanded(),
-      ].toRow(mainAxisAlignment: MainAxisAlignment.start).width(500.w); 
+      ].toRow(mainAxisAlignment: MainAxisAlignment.start).width(500.w);
   }
 }

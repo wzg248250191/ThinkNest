@@ -9,15 +9,18 @@ import 'dart:convert';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:think_nest/common/index.dart';
+import '../index.dart';
+import '/common/index.dart';
 
-import 'models/device_info_config.dart';
-import 'models/switch_circle_state.dart';
-import 'integration_command_repository.dart';
-import 'udp_hardware_command.dart';
+part 'controller/controller_switch_type.dart';
+part 'controller/controller_device_config_mixin.dart';
+part 'controller/controller_page_mixin.dart';
+part 'controller/controller_switch_cooldown_mixin.dart';
+part 'controller/controller_switch_state_mixin.dart';
+part 'controller/controller_switch_actions_mixin.dart';
+part 'controller/controller_impl.dart';
 
-part 'controller_switch_type.dart';
-part 'controller_device_config_mixin.dart';
-part 'controller_page_mixin.dart';
-part 'controller_switch_mixin.dart';
-part 'controller_impl.dart';
+const String kIntegrationGetBuilderId = 'integration';
+const String kDeviceConfigGetBuilderId = 'device_config';
+const List<String> kIntegrationUpdateIds = <String>[kIntegrationGetBuilderId];
+const List<String> kDeviceConfigUpdateIds = <String>[kDeviceConfigGetBuilderId];

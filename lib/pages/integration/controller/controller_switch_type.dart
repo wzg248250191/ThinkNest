@@ -1,4 +1,4 @@
-part of 'controller.dart';
+part of '../controller.dart';
 
 /// 一体化页面中的“逻辑开关”类型
 ///
@@ -44,3 +44,4 @@ enum IntegrationSwitchType {
   /// 该开关依赖的设备配置标题集合（用于 enabled 同步与批量下发命令）
   final List<String> deviceConfigTitles;
 }
+

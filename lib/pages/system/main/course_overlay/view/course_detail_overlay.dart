@@ -4,10 +4,9 @@ import 'package:get/get.dart';
 
 import 'package:think_nest/common/index.dart';
 
-import '../../../controller.dart';
-import '../controller/single_course_controller.dart';
-import '../widgets/desk_part.dart';
-import '../widgets/wall_part.dart';
+import '../../../../index.dart';
+
+
 
 class CourseDetailOverlay extends GetView<SingleCourseController> {
   const CourseDetailOverlay({super.key});

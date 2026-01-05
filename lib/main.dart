@@ -9,6 +9,9 @@ import 'common/index.dart';
 
 void main() async {
   await Global.init();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+  ]);
   runApp(const MyApp());
 }
 
@@ -97,5 +100,4 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
 

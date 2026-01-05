@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:think_nest/common/index.dart';
-import 'package:think_nest/pages/system/main/controller.dart';
-import 'package:think_nest/pages/system/main/features/course_overlay/data/pc_course_message_handler.dart';
+import 'package:think_nest/pages/index.dart';
+
 
 /// 课程列表页悬浮窗组件
 /// 显示当前正在运行的课程信息，点击可快速跳转

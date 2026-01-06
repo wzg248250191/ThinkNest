@@ -1,9 +1,9 @@
 // ignore_for_file: unnecessary_null_comparison
+import 'dart:async';
 
 import 'package:get/get.dart';
 import 'package:think_nest/common/index.dart';
-
-import '../../../../index.dart';
+import 'package:think_nest/pages/index.dart';
 
 
 class SingleCourseController extends GetxController {
@@ -23,6 +23,11 @@ class SingleCourseController extends GetxController {
   int wallVolume = 100;
   int deskVolume = 100;
 
+  Timer? _openCourseTimeoutTimer;
+  int _openCourseTimeoutToken = 0;
+  bool _expectWallEnable = false;
+  bool _expectDeskEnable = false;
+
   bool get isWallConnected => _socketService.isConnected(ServerType.wall);
 
   bool get isDeskConnected => _socketService.isConnected(ServerType.desktop);
@@ -30,6 +35,80 @@ class SingleCourseController extends GetxController {
   String? get wallServerIp => _socketService.connectedServerIp(ServerType.wall).value;
 
   String? get deskServerIp => _socketService.connectedServerIp(ServerType.desktop).value;
+
+  void _syncWholeEnabledFromParts() {
+    if (!wholeEnabled) {
+      if (wallEnabled && deskEnabled) {
+        wholeEnabled = true;
+      }
+      return;
+    }
+
+    if (!wallEnabled && !deskEnabled) {
+      wholeEnabled = false;
+    }
+  }
+
+  /// 取消打开课程超时
+  void _cancelOpenCourseTimeout() {
+    _openCourseTimeoutTimer?.cancel();
+    _openCourseTimeoutTimer = null;
+    _expectWallEnable = false;
+    _expectDeskEnable = false;
+  }
+
+  /// 启动打开课程超时
+  void _startOpenCourseTimeout({
+    required bool expectWallEnable,
+    required bool expectDeskEnable,
+  }) {
+    _openCourseTimeoutToken++;
+    final int token = _openCourseTimeoutToken;
+
+    _openCourseTimeoutTimer?.cancel();
+    _openCourseTimeoutTimer = null;
+
+    _expectWallEnable = expectWallEnable;
+    _expectDeskEnable = expectDeskEnable;
+
+    _openCourseTimeoutTimer = Timer(const Duration(seconds: 10), () {
+      if (token != _openCourseTimeoutToken) {
+        return;
+      }
+
+      final bool wallOk =
+          !_expectWallEnable || _handler.wallCourseEnabled.value == true;
+      final bool deskOk =
+          !_expectDeskEnable || _handler.deskCourseEnabled.value == true;
+      if (wallOk && deskOk) {
+        _cancelOpenCourseTimeout();
+        return;
+      }
+
+      _cancelOpenCourseTimeout();
+      ToastUtils.hide();    
+      wallEnabled = _handler.wallCourseEnabled.value == true;
+      deskEnabled = _handler.deskCourseEnabled.value == true;
+      _syncWholeEnabledFromParts();
+      update(['course_control_toggle', 'course_switches']);
+    });
+  }
+
+  void _tryCompleteOpenCourseTimeout() {
+    if (!_expectWallEnable && !_expectDeskEnable) {
+      return;
+    }
+
+    if (_expectWallEnable && _handler.wallCourseEnabled.value != true) {
+      return;
+    }
+    if (_expectDeskEnable && _handler.deskCourseEnabled.value != true) {
+      return;
+    }
+
+    _cancelOpenCourseTimeout();
+    ToastUtils.hide();
+  }
 
   @override
   void onInit() {
@@ -57,7 +136,9 @@ class SingleCourseController extends GetxController {
           msg = '主机上没有对应的课程';
           break;
         case OperationStatus.CoursePlayisRunning:
-          msg = '课程正在运行中';
+          _cancelOpenCourseTimeout();
+          ToastUtils.hide(force: true);
+
           final ServerType? type = _handler.lastStatusServerType.value;
           if (type == ServerType.wall) {
             setWallEnabled(false, skipConfirm: true);
@@ -67,7 +148,11 @@ class SingleCourseController extends GetxController {
             setWallEnabled(false, skipConfirm: true);
             setDeskEnabled(false, skipConfirm: true);
           }
-          break;
+          ToastUtils.show(
+            '课程已打开，正在关闭',
+            duration: const Duration(seconds: 2),
+          );
+          return;
         case OperationStatus.DataformatterError:
           msg = '数据格式错误';
           break;
@@ -79,6 +164,7 @@ class SingleCourseController extends GetxController {
       }
 
       if (msg != null) {
+        _cancelOpenCourseTimeout();
         final info = _handler.lastStatusInfo.value;
         final fullMsg = (info != null && info.isNotEmpty) ? '$msg: $info' : msg;
         
@@ -109,9 +195,8 @@ class SingleCourseController extends GetxController {
         return;
       }
       wallEnabled = enabled;
-      if (deskEnabled == enabled) {
-        wholeEnabled = enabled;
-      }
+      _syncWholeEnabledFromParts();
+      _tryCompleteOpenCourseTimeout();
       update(['course_control_toggle', 'course_switches']);
     });
 
@@ -120,9 +205,8 @@ class SingleCourseController extends GetxController {
         return;
       }
       deskEnabled = enabled;
-      if (wallEnabled == enabled) {
-        wholeEnabled = enabled;
-      }
+      _syncWholeEnabledFromParts();
+      _tryCompleteOpenCourseTimeout();
       update(['course_control_toggle', 'course_switches']);
     });
 
@@ -149,14 +233,15 @@ class SingleCourseController extends GetxController {
     
     // 1. 如果打开的是“当前正在运行”的课程，则直接复用 Handler 中的状态
     //    这解决了“返回再进入时状态丢失”的问题
-    if (_handler.currentCourseId.value == courseId) {
+    final bool isRunning =
+        _handler.wallCourseEnabled.value == true || _handler.deskCourseEnabled.value == true;
+    if (isRunning && _handler.currentCourseId.value == courseId) {
        this.courseId = courseId;
-       controlSelectedIndex = 0;
        
        // 同步 Handler 中的真实状态到 UI 变量
        wallEnabled = _handler.wallCourseEnabled.value;
        deskEnabled = _handler.deskCourseEnabled.value;
-       wholeEnabled = wallEnabled && deskEnabled;
+       _syncWholeEnabledFromParts();
        
        // 不需要调用 resetLocalState，因为状态已经是最新的
     } else {
@@ -189,6 +274,8 @@ class SingleCourseController extends GetxController {
     deskEnabled = false;
     wholeEnabled = false;
 
+    _cancelOpenCourseTimeout();
+    ToastUtils.hide();
     _handler.detachCourse();
 
     // 强制让出 UI 线程，确保状态清理不会阻塞 UI 隐藏动画
@@ -216,12 +303,22 @@ class SingleCourseController extends GetxController {
   /// 说明：
   /// - 若目标端未连接：触发 ensureConnected（历史 IP 直连 → UDP 扫描兜底 → 建连）
   /// - 连接成功后：发送开启课程指令
-  Future<bool> _openCourseOn(ServerType serverType, String courseId) async {
+  Future<bool> _openCourseOn(
+    ServerType serverType,
+    String courseId, {
+    bool ensureConnected = true,
+  }) async {
     if (!_socketService.isConnected(serverType)) {
+      if (!ensureConnected) {
+        return false;
+      }
       final connected = await _socketService.ensureConnected(serverType);
       if (!connected) {
         return false;
       }
+    }
+    if (!_socketService.isConnected(serverType)) {
+      return false;
     }
     _socketService.controlApplication(serverType, courseId, true);
     return true;
@@ -244,39 +341,42 @@ class SingleCourseController extends GetxController {
     if (id == null) {
       return;
     }
-
-    bool wallSuccess;
-    bool deskSuccess;
-
     if (enabled) {
-      wallSuccess = await _openCourseOn(ServerType.wall, id);
-      deskSuccess = await _openCourseOn(ServerType.desktop, id);
-    } else {
-      wallSuccess = await _closeCourseOn(ServerType.wall, id);
-      deskSuccess = await _closeCourseOn(ServerType.desktop, id);
-    }
+      _cancelOpenCourseTimeout();
+      final bool wallConnected = _socketService.isConnected(ServerType.wall);
+      final bool deskConnected = _socketService.isConnected(ServerType.desktop);
 
-    // 关键修复：主动同步 Handler 状态
-    // 只有在关闭时才主动同步，开启时等待服务器反向通知
-    if (!enabled) {
-      _handler.wallCourseEnabled.value = false;
-       _handler.deskCourseEnabled.value = false;
-      wallEnabled = false;
-       deskEnabled = false;
-       wholeEnabled = false;
-    }     
-    if (wallSuccess && deskSuccess&& enabled) {
-      wholeEnabled = enabled;
-    } else if (!wallSuccess && !deskSuccess) {
-      ToastUtils.show('墙面和桌面服务器均未连接',type: ToastType.error);
-    } else if (!wallSuccess) {
-      ToastUtils.show('墙面服务器未连接',type: ToastType.error);
-    } else {
-      ToastUtils.show('桌面服务器未连接',type: ToastType.error);  
-    }
-    if (enabled) {
+      if (!wallConnected || !deskConnected) {
+        if (!wallConnected && !deskConnected) {
+          ToastUtils.show('墙面和桌面服务器均未连接', type: ToastType.error);
+        } else if (!wallConnected) {
+          ToastUtils.show('墙面服务器未连接', type: ToastType.error);
+        } else {
+          ToastUtils.show('桌面服务器未连接', type: ToastType.error);
+        }
+        update(['course_control_toggle']);
+        return;
+      }
+
+      _socketService.controlApplication(ServerType.wall, id, true);
+      _socketService.controlApplication(ServerType.desktop, id, true);
+
       ToastUtils.showLoading('课程正在打开中，请耐心等待');
+      _startOpenCourseTimeout(expectWallEnable: true, expectDeskEnable: true);
+      update(['course_control_toggle']);
+      return;
     }
+
+    _cancelOpenCourseTimeout();
+    ToastUtils.hide();
+    await _closeCourseOn(ServerType.wall, id);
+    await _closeCourseOn(ServerType.desktop, id);
+
+    _handler.wallCourseEnabled.value = false;
+    _handler.deskCourseEnabled.value = false;
+    wallEnabled = false;
+    deskEnabled = false;
+    wholeEnabled = false;
     update(['course_control_toggle']);
   }
 
@@ -287,7 +387,8 @@ class SingleCourseController extends GetxController {
     }
     bool success;
     if (enabled) {
-      success = await _openCourseOn(ServerType.wall, id);
+      _cancelOpenCourseTimeout();
+      success = await _openCourseOn(ServerType.wall, id, ensureConnected: false);
     } else {
       if (!skipConfirm) {
         final bool confirmed = (await AlertDialog.show(
@@ -302,6 +403,7 @@ class SingleCourseController extends GetxController {
     }
 
     if (!success) {
+      _cancelOpenCourseTimeout();
       ToastUtils.show('墙面服务器未连接',type: ToastType.error);
       return;
     }
@@ -311,11 +413,13 @@ class SingleCourseController extends GetxController {
       _handler.wallCourseEnabled.value = enabled;
       wallEnabled = enabled;
     }
-    if (deskEnabled == enabled) {
-      wholeEnabled = enabled;
-    }
+    _syncWholeEnabledFromParts();
     if (enabled) {
       ToastUtils.showLoading('课程正在打开中，请耐心等待');
+      _startOpenCourseTimeout(expectWallEnable: true, expectDeskEnable: false);
+    } else {
+      _cancelOpenCourseTimeout();
+      ToastUtils.hide();
     }
     update(['course_control_toggle']);
   }
@@ -328,7 +432,8 @@ class SingleCourseController extends GetxController {
 
     bool success;
     if (enabled) {
-      success = await _openCourseOn(ServerType.desktop, id);
+      _cancelOpenCourseTimeout();
+      success = await _openCourseOn(ServerType.desktop, id, ensureConnected: false);
     } else {
       if (!skipConfirm) {
         final bool confirmed = (await AlertDialog.show(
@@ -343,20 +448,23 @@ class SingleCourseController extends GetxController {
     }
 
     if (!success) {
+      _cancelOpenCourseTimeout();
       ToastUtils.show('桌面服务器未连接',type: ToastType.error);
       return;
     }
     if (enabled) {
       ToastUtils.showLoading('课程正在打开中，请耐心等待');
+      _startOpenCourseTimeout(expectWallEnable: false, expectDeskEnable: true);
+    } else {
+      _cancelOpenCourseTimeout();
+      ToastUtils.hide();
     }
     // 关键修复：主动同步 Handler 状态
     if (!enabled) {
       _handler.deskCourseEnabled.value = enabled;
       deskEnabled = enabled;
     }
-    if (wallEnabled == enabled) {
-      wholeEnabled = enabled;
-    }
+    _syncWholeEnabledFromParts();
     update(['course_control_toggle']);
   }
 
@@ -400,6 +508,7 @@ class SingleCourseController extends GetxController {
   void onClose() {
     // 移除所有 dispose 逻辑，因为此 Controller 为常驻单例，Worker 需要一直保持监听
     // 只有在 App 退出时才需要销毁，此时内存会自动回收
+    _cancelOpenCourseTimeout();
     super.onClose();
   }
 }

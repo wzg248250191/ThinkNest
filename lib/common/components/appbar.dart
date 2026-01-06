@@ -53,6 +53,8 @@ class AppbarWidget extends StatelessWidget implements PreferredSizeWidget {
               borderRadius: 999,
               enableRipple: false,
               onTap: onTap,
+              //backgroundColor: Colors.red.withValues(alpha: 0.2),
+              //borderColor: Colors.red,
             )
           : null,
       title: TextWidget(

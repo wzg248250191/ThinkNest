@@ -88,6 +88,12 @@ class MainController extends GetxController {
       return;
     }
     
+    final singleCourseController = Get.find<SingleCourseController>();
+    if (!isRunning && singleCourseController.controlSelectedIndex != 0) {
+      singleCourseController.controlSelectedIndex = 0;
+      singleCourseController.update(['type_switch']);
+    }
+
     showCourseDetail = true;
     if (currentIndex != 0) {
       currentIndex = 0;
@@ -101,7 +107,7 @@ class MainController extends GetxController {
     Future.delayed(const Duration(milliseconds: 200), () {
       try {
         // 直接调用常驻的 Controller
-        Get.find<SingleCourseController>().openCourse(name).catchError((e) {
+        singleCourseController.openCourse(name).catchError((e) {
           print('Error opening course: $e');
         });
       } catch (e) {

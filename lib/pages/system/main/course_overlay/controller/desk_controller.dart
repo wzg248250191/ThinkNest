@@ -42,7 +42,7 @@ class DeskController extends GetxController {
     }
     _socketService.sendUnityOperation(
       ServerType.desktop,
-      isOn ? CourseNetOperationTable.deskPlayTest.code : CourseNetOperationTable.deskTestOver.code,
+      isOn ? CourseNetOperationTable.deskPlayTest.code : CourseNetOperationTable.deskRestart.code,
     );
     return true;
   }

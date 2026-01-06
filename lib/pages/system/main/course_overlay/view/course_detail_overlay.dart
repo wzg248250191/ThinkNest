@@ -14,15 +14,20 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
   @override
   Widget build(BuildContext context) {
     final mainController = Get.find<MainController>();
-    final title = controller.courseId ?? '课程';
-    return Scaffold(
-      backgroundColor: CustomAppColors.card,
-      appBar: AppbarWidget(
-        title: title,
-        isBack: true,
-        onTap: mainController.closeCourseController,
-      ),
-      body: _buildView(context),
+    return GetBuilder<SingleCourseController>(
+      id: 'course_detail',
+      builder: (_) {
+        final title = controller.courseId ?? '课程';
+        return Scaffold(
+          backgroundColor: CustomAppColors.card,
+          appBar: AppbarWidget(
+            title: title,
+            isBack: true,
+            onTap: mainController.closeCourseController,
+          ),
+          body: _buildView(context),
+        );
+      },
     );
   }
 

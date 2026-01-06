@@ -536,11 +536,23 @@ class _ButtonWidgetState extends State<ButtonWidget> {
     );
 
     // 背景、边框
-    if (widget.variant != ButtonWidgetVariant.icon) {
+    final bool shouldDecorate = widget.variant != ButtonWidgetVariant.icon ||
+        widget._width != null ||
+        widget.height != null ||
+        widget.backgroundColor != null ||
+        widget.borderColor != null;
+    if (shouldDecorate) {
+      final bool isIcon = widget.variant == ButtonWidgetVariant.icon;
       child = child.decorated(
-        color: _backgroundColor(),
-        borderRadius: _borderRadius(),
-        border: _border(),
+        color: isIcon ? (widget.backgroundColor ?? Colors.transparent) : _backgroundColor(),
+        borderRadius: isIcon
+            ? BorderRadius.circular(_size(widget.borderRadius ?? AppRadius.button))
+            : _borderRadius(),
+        border: isIcon
+            ? (widget.borderColor != null
+                ? Border.all(color: widget.borderColor!, width: AppBorder.button)
+                : null)
+            : _border(),
       );
     }
 

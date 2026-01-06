@@ -146,11 +146,15 @@ class _MainViewGetX extends GetView<MainController> {
         GetBuilder<MainController>(
           id: 'main_overlay',
           builder: (_) {
-            if (!controller.showCourseDetail) {
-              return const SizedBox.shrink();
-            }
-            return const Positioned.fill(
-              child: CourseDetailOverlay(),
+            final bool visible = controller.showCourseDetail;
+            return Positioned.fill(
+              child: Offstage(
+                offstage: !visible,
+                child: TickerMode(
+                  enabled: visible,
+                  child: const CourseDetailOverlay(),
+                ),
+              ),
             );
           },
         ),

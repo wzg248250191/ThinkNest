@@ -28,6 +28,7 @@ enum ToastIconStyle {
 class ToastUtils {
   static bool _isShowing = false;
   static Timer? _dismissTimer;
+  static int _hideLockedUntilMs = 0;
   static final double _minWidth = 210.w;
   static final double _maxWidth = 600.w;
   static final double _minHeight = 210.h;
@@ -35,7 +36,14 @@ class ToastUtils {
   static final double _defaultFontSize = 28.sp;
 
   /// 隐藏当前 Toast/Loading 弹层
-  static void hide() {
+  static void hide({bool force = false}) {
+    if (_isShowing) {
+      final int now = DateTime.now().millisecondsSinceEpoch;
+      if (!force && now < _hideLockedUntilMs) {
+        return;
+      }
+    }
+
     _dismissTimer?.cancel();
     _dismissTimer = null;
 
@@ -45,6 +53,18 @@ class ToastUtils {
       }
       _isShowing = false;
     }
+
+    if (force) {
+      _hideLockedUntilMs = 0;
+    }
+  }
+
+  static void lockHide(Duration duration) {
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    final int next = now + duration.inMilliseconds;
+    if (next > _hideLockedUntilMs) {
+      _hideLockedUntilMs = next;
+    }
   }
 
   /// 强制重置显示状态，防止因异常导致的死锁
@@ -52,6 +72,7 @@ class ToastUtils {
     _isShowing = false;
     _dismissTimer?.cancel();
     _dismissTimer = null;
+    _hideLockedUntilMs = 0;
   }
 
   /// 显示 Toast
@@ -73,9 +94,10 @@ class ToastUtils {
     double? height,
     double? fontSize,
   }) {
-    hide();
+    hide(force: true);
 
     _isShowing = true;
+    lockHide(duration);
     Get.dialog(
       Center(
         child: Material(
@@ -125,7 +147,7 @@ class ToastUtils {
     // 定时关闭
     _dismissTimer?.cancel();
     _dismissTimer = Timer(duration, () {
-      hide();
+      hide(force: true);
     });
   }
 
@@ -140,7 +162,7 @@ class ToastUtils {
     double? height,
     double? fontSize,
   }) {
-    hide();
+    hide(force: true);
 
     _isShowing = true;
     Get.dialog(

@@ -83,19 +83,57 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     Duration retryDelay = const Duration(seconds: 2),
     Duration udpTimeout = const Duration(seconds: 2),
   }) async {
-    final wall = await _recoverSingleConnectionAtStartup(
-      ServerType.wall,
-      attempts: attempts,
-      retryDelay: retryDelay,
-      udpTimeout: udpTimeout,
-    );
-    final desktop = await _recoverSingleConnectionAtStartup(
-      ServerType.desktop,
-      attempts: attempts,
-      retryDelay: retryDelay,
-      udpTimeout: udpTimeout,
-    );
-    return {ServerType.wall: wall, ServerType.desktop: desktop};
+    final wallEndpoint = _loadLastServerEndpoint(ServerType.wall);
+    final desktopEndpoint = _loadLastServerEndpoint(ServerType.desktop);
+
+    Future<List<DiscoveredServer>>? scanFuture;
+    if (wallEndpoint == null || desktopEndpoint == null) {
+      scanFuture = _scanForServersOnce(timeout: udpTimeout);
+    }
+
+    Future<bool> recoverOne(ServerType serverType, ({String ip, int port})? endpoint) async {
+      if (_clientManager.getClient(serverType).isConnected) {
+        return true;
+      }
+
+      if (endpoint == null) {
+        final servers = await scanFuture!;
+        final discovered = _pickDiscoveredServer(servers, serverType);
+        if (discovered == null) {
+          return false;
+        }
+        return await connect(
+          serverType,
+          discovered.ipAddress,
+          discovered.tcpPort,
+          autoReconnect: true,
+        );
+      }
+
+      for (var i = 0; i < attempts; i++) {
+        final ok = await connect(
+          serverType,
+          endpoint.ip,
+          endpoint.port,
+          autoReconnect: false,
+        );
+        if (ok) {
+          _clientManager.setAutoReconnectEnabled(serverType, true);
+          return true;
+        }
+        if (i < attempts - 1) {
+          await Future.delayed(retryDelay);
+        }
+      }
+      return false;
+    }
+
+    final results = await Future.wait<bool>([
+      recoverOne(ServerType.wall, wallEndpoint),
+      recoverOne(ServerType.desktop, desktopEndpoint),
+    ]);
+
+    return {ServerType.wall: results[0], ServerType.desktop: results[1]};
   }
 
   /// 业务强关联：确保指定类型服务器已连接（历史 IP 优先，必要时 UDP 扫描兜底）
@@ -116,57 +154,6 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
         .whenComplete(() => _ensureConnectInFlight.remove(serverType));
     _ensureConnectInFlight[serverType] = future;
     return future;
-  }
-
-  /// 启动阶段恢复单个服务器连接
-  ///
-  /// 说明：
-  /// - 有历史 IP：多次直连（autoReconnect=false），成功后再开启 autoReconnect
-  /// - 无历史 IP：短 UDP 扫描拿到 IP 后直接连接（autoReconnect=true）
-  Future<bool> _recoverSingleConnectionAtStartup(
-    ServerType serverType, {
-    required int attempts,
-    required Duration retryDelay,
-    required Duration udpTimeout,
-  }) async {
-    if (_clientManager.getClient(serverType).isConnected) {
-      return true;
-    }
-
-    final endpoint = _loadLastServerEndpoint(serverType);
-    if (endpoint == null) {
-      // 首次安装/无缓存时：通过 UDP 扫描拿到服务器 IP，再建立连接
-      final servers = await _scanForServersOnce(timeout: udpTimeout);
-      final discovered = _pickDiscoveredServer(servers, serverType);
-      if (discovered == null) {
-        return false;
-      }
-      return await connect(
-        serverType,
-        discovered.ipAddress,
-        discovered.tcpPort,
-        autoReconnect: true,
-      );
-    }
-
-    for (var i = 0; i < attempts; i++) {
-      // 启动阶段先关闭重连，避免网络未就绪时持续刷重试
-      final ok = await connect(
-        serverType,
-        endpoint.ip,
-        endpoint.port,
-        autoReconnect: false,
-      );
-      if (ok) {
-        // 启动连接成功后再开启重连，保证后续断线能自动恢复
-        _clientManager.setAutoReconnectEnabled(serverType, true);
-        return true;
-      }
-      if (i < attempts - 1) {
-        await Future.delayed(retryDelay);
-      }
-    }
-    return false;
   }
 
   /// ensureConnected 的内部实现
@@ -287,30 +274,23 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     print('开始自动发现服务器...');
     final servers = await scanForServers(timeout: timeout);
 
-    final results = <ServerType, bool>{
-      ServerType.wall: false,
-      ServerType.desktop: false,
-    };
-
-    // 连接墙面服务器
-    final wallServer = _pickDiscoveredServer(servers, ServerType.wall);
-    if (wallServer != null) {
-      results[ServerType.wall] = await connectToDiscoveredServer(wallServer);
-      print('墙面服务器连接${results[ServerType.wall]! ? "成功" : "失败"}');
-    } else {
-      print('未找到墙面服务器');
+    Future<bool> connectIfFound(ServerType serverType) async {
+      final discovered = _pickDiscoveredServer(servers, serverType);
+      if (discovered == null) {
+        print('未找到${serverType == ServerType.wall ? "墙面" : "桌面"}服务器');
+        return false;
+      }
+      final ok = await connectToDiscoveredServer(discovered);
+      print('${serverType == ServerType.wall ? "墙面" : "桌面"}服务器连接${ok ? "成功" : "失败"}');
+      return ok;
     }
 
-    // 连接桌面服务器
-    final desktopServer = _pickDiscoveredServer(servers, ServerType.desktop);
-    if (desktopServer != null) {
-      results[ServerType.desktop] = await connectToDiscoveredServer(desktopServer);
-      print('桌面服务器连接${results[ServerType.desktop]! ? "成功" : "失败"}');
-    } else {
-      print('未找到桌面服务器');
-    }
+    final results = await Future.wait<bool>([
+      connectIfFound(ServerType.wall),
+      connectIfFound(ServerType.desktop),
+    ]);
 
-    return results;
+    return {ServerType.wall: results[0], ServerType.desktop: results[1]};
   }
 
   /// 断开服务器连接

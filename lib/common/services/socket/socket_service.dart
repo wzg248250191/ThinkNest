@@ -70,6 +70,8 @@ abstract class SocketServiceBase extends GetxService {
 
   final RxBool isCourseListLoading = true.obs;
   final RxList<String> courseList = <String>[].obs;
+
+  ServerType? _courseListSource;
   
   /// 所有消息接收流控制器（合并）
   final _allMessageController = StreamController<(ServerType, MESSAGE)>.broadcast();

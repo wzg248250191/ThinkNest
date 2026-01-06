@@ -66,8 +66,29 @@ mixin SocketServiceHandleMixin on SocketServiceBase {
   void _handleServerResponse(ServerType serverType, ServerMessage serverMessage) {
     switch (serverMessage.serverBehaviour) {
       case SERVERBEHAVIOUR.CourseList:
+        final bool wallConnected = isConnected(ServerType.wall);
+        final bool shouldIgnoreDesktop =
+            serverType == ServerType.desktop && _courseListSource == ServerType.wall && wallConnected;
+
+        if (shouldIgnoreDesktop) {
+          print('忽略${serverType.displayName}课程清单（当前以墙面为准）: ${serverMessage.courseList.length}');
+          break;
+        }
+
+        final bool shouldApply =
+            _courseListSource == null ||
+            _courseListSource == serverType ||
+            serverType == ServerType.wall ||
+            !wallConnected;
+
+        if (!shouldApply) {
+          print('忽略${serverType.displayName}课程清单: ${serverMessage.courseList.length}');
+          break;
+        }
+
         courseList.assignAll(serverMessage.courseList);
         isCourseListLoading.value = false;
+        _courseListSource = serverType;
         unawaited(Storage().setList(_courseListCacheKey, serverMessage.courseList));
         print('收到${serverType.displayName}课程清单: ${courseList.length}');
         break;

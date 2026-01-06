@@ -44,8 +44,9 @@ mixin SocketServiceSendMixin on SocketServiceBase {
 
   /// 向指定服务器发送“获取课程清单”的请求，并将本地清单状态重置为加载中
   void requestCourseList(ServerType serverType) {
-    isCourseListLoading.value = true;
-    courseList.clear();
+    if (courseList.isEmpty) {
+      isCourseListLoading.value = true;
+    }
 
     final serverMessage = ServerMessage()..serverBehaviour = SERVERBEHAVIOUR.CourseList;
     sendToServer(serverType, serverMessage);

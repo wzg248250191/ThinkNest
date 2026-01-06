@@ -23,17 +23,156 @@ enum ToastIconStyle {
 }
 
 /// 全局通用的 Toast 提示工具类
-/// 使用 Get.dialog 实现，无需 Context，支持自定义样式
+/// 使用 Overlay 实现，无需 Context，支持自定义样式
 /// 背景为全屏半透明,
 class ToastUtils {
   static bool _isShowing = false;
   static Timer? _dismissTimer;
   static int _hideLockedUntilMs = 0;
+  static int _generation = 0;
+  static OverlayEntry? _overlayEntry;
+  static final ValueNotifier<_ToastPayload?> _payload =
+      ValueNotifier<_ToastPayload?>(null);
   static final double _minWidth = 210.w;
   static final double _maxWidth = 600.w;
   static final double _minHeight = 210.h;
   static final double _maxHeight = 600.h;
   static final double _defaultFontSize = 28.sp;
+
+  static OverlayState? _getOverlayState() {
+    final overlayFromKey = Get.key.currentState?.overlay;
+    if (overlayFromKey != null) {
+      return overlayFromKey;
+    }
+
+    final BuildContext? overlayContext = Get.overlayContext;
+    if (overlayContext != null) {
+      return Overlay.of(overlayContext, rootOverlay: true);
+    }
+
+    final BuildContext? context = Get.context;
+    if (context != null) {
+      return Overlay.of(context, rootOverlay: true);
+    }
+
+    return null;
+  }
+
+  static void _ensureOverlayEntry() {
+    if (_overlayEntry != null) {
+      return;
+    }
+
+    final overlayState = _getOverlayState();
+    if (overlayState == null) {
+      return;
+    }
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        return ValueListenableBuilder<_ToastPayload?>(
+          valueListenable: _payload,
+          builder: (context, value, _) {
+            if (value == null) {
+              return const SizedBox.shrink();
+            }
+
+            return Stack(
+              children: [
+                ModalBarrier(
+                  dismissible: false,
+                  color: Colors.black.withOpacity(0.3),
+                ),
+                Center(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      width: value.width,
+                      height: value.height,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 40.w,
+                        vertical: 30.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: CustomAppColors.background,
+                        borderRadius: BorderRadius.circular(16.r),
+                      ),
+                      constraints: BoxConstraints(
+                        minWidth: _minWidth,
+                        maxWidth: _maxWidth,
+                        minHeight: _minHeight,
+                        maxHeight: _maxHeight,
+                      ),
+                      child: value.isLoading
+                          ? <Widget>[
+                              SizedBox(
+                                width: 64.sp,
+                                height: 64.sp,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 4.sp,
+                                  backgroundColor:
+                                      CustomAppColors.text.withOpacity(0.2),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    CustomAppColors.text,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 20.h),
+                              Text(
+                                value.msg,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: CustomAppColors.text,
+                                  fontSize:
+                                      value.fontSize ?? _defaultFontSize,
+                                  fontWeight: FontWeight.w500,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ].toColumn(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                            )
+                          : <Widget>[
+                              value.customIcon ??
+                                  _buildIcon(
+                                    value.type,
+                                    iconStyle: value.iconStyle,
+                                  ),
+                              SizedBox(height: 20.h),
+                              Text(
+                                value.msg,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: CustomAppColors.text,
+                                  fontSize:
+                                      value.fontSize ?? _defaultFontSize,
+                                  fontWeight: FontWeight.w500,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ].toColumn(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    overlayState.insert(_overlayEntry!);
+    _isShowing = true;
+  }
+
+  static void _preemptFlow() {
+    _generation++;
+    _dismissTimer?.cancel();
+    _dismissTimer = null;
+  }
 
   /// 隐藏当前 Toast/Loading 弹层
   static void hide({bool force = false}) {
@@ -44,15 +183,12 @@ class ToastUtils {
       }
     }
 
-    _dismissTimer?.cancel();
-    _dismissTimer = null;
+    _preemptFlow();
 
-    if (_isShowing) {
-      if (Get.isDialogOpen ?? false) {
-        Get.back();
-      }
-      _isShowing = false;
-    }
+    _payload.value = null;
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _isShowing = false;
 
     if (force) {
       _hideLockedUntilMs = 0;
@@ -69,10 +205,7 @@ class ToastUtils {
 
   /// 强制重置显示状态，防止因异常导致的死锁
   static void resetState() {
-    _isShowing = false;
-    _dismissTimer?.cancel();
-    _dismissTimer = null;
-    _hideLockedUntilMs = 0;
+    hide(force: true);
   }
 
   /// 显示 Toast
@@ -94,59 +227,29 @@ class ToastUtils {
     double? height,
     double? fontSize,
   }) {
-    hide(force: true);
+    _preemptFlow();
 
-    _isShowing = true;
     lockHide(duration);
-    Get.dialog(
-      Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: width,
-            height: height,
-            padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 30.h),
-            decoration: BoxDecoration(
-              color: CustomAppColors.background, // 黑色半透明背景 (0xB3 = 70% opacity)
-              borderRadius: BorderRadius.circular(16.r),
-            ),
-            // 最小宽度限制，避免文字太少时太窄
-            constraints: BoxConstraints(
-              minWidth: _minWidth,
-              maxWidth: _maxWidth,
-              minHeight: _minHeight,
-              maxHeight: _maxHeight,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // 图标区域
-                customIcon ?? _buildIcon(type, iconStyle: iconStyle),
-                SizedBox(height: 20.h),
-                // 文字区域
-                Text(
-                  msg,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: CustomAppColors.text,
-                    fontSize: fontSize ?? _defaultFontSize,
-                    fontWeight: FontWeight.w500,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      barrierColor: Colors.black.withOpacity(0.3), // 全屏淡色遮罩背景
-      barrierDismissible: false, // 禁止点击背景关闭，拦截所有点击事件
+    _ensureOverlayEntry();
+    if (_overlayEntry == null) {
+      return;
+    }
+    _payload.value = _ToastPayload.toast(
+      msg: msg,
+      type: type,
+      iconStyle: iconStyle,
+      customIcon: customIcon,
+      width: width,
+      height: height,
+      fontSize: fontSize,
     );
 
     // 定时关闭
-    _dismissTimer?.cancel();
+    final int token = _generation;
     _dismissTimer = Timer(duration, () {
+      if (token != _generation) {
+        return;
+      }
       hide(force: true);
     });
   }
@@ -162,59 +265,18 @@ class ToastUtils {
     double? height,
     double? fontSize,
   }) {
-    hide(force: true);
+    _preemptFlow();
+    _hideLockedUntilMs = 0;
 
-    _isShowing = true;
-    Get.dialog(
-      Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: width,
-            height: height,
-            padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 30.h),
-            decoration: BoxDecoration(
-              color: CustomAppColors.background,
-              borderRadius: BorderRadius.circular(16.r),
-            ),
-            constraints: BoxConstraints(
-              minWidth: _minWidth,
-              maxWidth: _maxWidth,
-              minHeight: _minHeight,
-              maxHeight: _maxHeight,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 64.sp,
-                  height: 64.sp,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 4.sp,
-                    backgroundColor: CustomAppColors.text.withOpacity(0.2),
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(CustomAppColors.text),
-                  ),
-                ),
-                SizedBox(height: 20.h),
-                Text(
-                  msg,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: CustomAppColors.text,
-                    fontSize: fontSize ?? _defaultFontSize,
-                    fontWeight: FontWeight.w500,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      barrierColor: Colors.black.withOpacity(0.3),
-      barrierDismissible: false,
+    _ensureOverlayEntry();
+    if (_overlayEntry == null) {
+      return;
+    }
+    _payload.value = _ToastPayload.loading(
+      msg: msg,
+      width: width,
+      height: height,
+      fontSize: fontSize,
     );
   }
 
@@ -268,4 +330,65 @@ class ToastUtils {
       opticalSize: isThin ? 64 : null,
     );
   }
+}
+
+class _ToastPayload {
+  const _ToastPayload({
+    required this.msg,
+    required this.isLoading,
+    required this.type,
+    required this.iconStyle,
+    required this.customIcon,
+    required this.width,
+    required this.height,
+    required this.fontSize,
+  });
+
+  factory _ToastPayload.toast({
+    required String msg,
+    required ToastType type,
+    required ToastIconStyle iconStyle,
+    required Widget? customIcon,
+    required double? width,
+    required double? height,
+    required double? fontSize,
+  }) {
+    return _ToastPayload(
+      msg: msg,
+      isLoading: false,
+      type: type,
+      iconStyle: iconStyle,
+      customIcon: customIcon,
+      width: width,
+      height: height,
+      fontSize: fontSize,
+    );
+  }
+
+  factory _ToastPayload.loading({
+    required String msg,
+    required double? width,
+    required double? height,
+    required double? fontSize,
+  }) {
+    return _ToastPayload(
+      msg: msg,
+      isLoading: true,
+      type: ToastType.info,
+      iconStyle: ToastIconStyle.thick,
+      customIcon: null,
+      width: width,
+      height: height,
+      fontSize: fontSize,
+    );
+  }
+
+  final String msg;
+  final bool isLoading;
+  final ToastType type;
+  final ToastIconStyle iconStyle;
+  final Widget? customIcon;
+  final double? width;
+  final double? height;
+  final double? fontSize;
 }

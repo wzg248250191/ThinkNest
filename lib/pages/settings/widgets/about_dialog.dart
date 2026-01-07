@@ -19,12 +19,14 @@ class AboutDialogWidget extends StatelessWidget {
     return Container(
       width: 1760.w,
       padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 38.h),
-      child: TextWidget.label(
-        aboutContent,
-        fontSize: 32.w,
-        textStyle: TextStyle(
-          letterSpacing: 1.w,
-          height: 60.w / 32.w,
+      child: SingleChildScrollView(
+        child: TextWidget.label(
+          aboutContent,
+          fontSize: 32.w,
+          textStyle: TextStyle(
+            letterSpacing: 1.w,
+            height: 60.w / 32.w,
+          ),
         ),
       ),
     );

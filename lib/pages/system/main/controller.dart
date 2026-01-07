@@ -94,6 +94,14 @@ class MainController extends GetxController {
       singleCourseController.update(['type_switch']);
     }
 
+    if (singleCourseController.courseId != name) {
+      singleCourseController.courseId = name;
+      singleCourseController.update(['course_detail']);
+    }
+    singleCourseController.wallVolume = handler.wallVolume.value.clamp(0, 100);
+    singleCourseController.deskVolume = handler.deskVolume.value.clamp(0, 100);
+    singleCourseController.update(['volume_slider']);
+
     showCourseDetail = true;
     if (currentIndex != 0) {
       currentIndex = 0;

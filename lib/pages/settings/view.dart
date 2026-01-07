@@ -66,7 +66,7 @@ class SettingsPage extends GetView<SettingsController> {
                     fontSize: 26.sp,
                   ),
                   title: TextWidget.label(
-                    '',
+                    controller.appVersionLabel,
                     fontSize: 26.sp,
                   ),
                   subIcon: const Icon(Icons.chevron_right),

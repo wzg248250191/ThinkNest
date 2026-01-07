@@ -246,7 +246,6 @@ class SingleCourseController extends GetxController {
        // 不需要调用 resetLocalState，因为状态已经是最新的
     } else {
        // 2. 如果打开的是一个新课程，则才需要重置状态
-       this.courseId = null;
        controlSelectedIndex = 0;
 
        wallEnabled = false;
@@ -259,6 +258,9 @@ class SingleCourseController extends GetxController {
        
        this.courseId = courseId;
     }
+
+    wallVolume = _handler.wallVolume.value.clamp(0, 100);
+    deskVolume = _handler.deskVolume.value.clamp(0, 100);
 
     // 分批次更新，避免一次性刷新太多组件导致掉帧
     update(['course_detail', 'course_control_toggle']);
@@ -484,6 +486,7 @@ class SingleCourseController extends GetxController {
     if (_socketService.isConnected(ServerType.wall)) {
       _socketService.setVolume(ServerType.wall, wallVolume);
     }
+    await _handler.persistVolume(serverType: ServerType.wall, volume: wallVolume);
   }
 
   void setDeskVolume(int value) {
@@ -502,6 +505,7 @@ class SingleCourseController extends GetxController {
     if (_socketService.isConnected(ServerType.desktop)) {
       _socketService.setVolume(ServerType.desktop, deskVolume);
     }
+    await _handler.persistVolume(serverType: ServerType.desktop, volume: deskVolume);
   }
 
   @override

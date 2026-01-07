@@ -53,7 +53,9 @@ bool _isSameLocalDay(DateTime a, DateTime b) {
 
 class PcCourseMessageHandler extends GetxService {
   // 持久化 Key
-  static const String _storageKey = 'active_course_session';
+  static const String _storageKey = StorageKeys.activeCourseSession;
+  static const String _wallVolumeKey = StorageKeys.courseWallVolume;
+  static const String _deskVolumeKey = StorageKeys.courseDeskVolume;
 
   final RxnString currentCourseId = RxnString();
 
@@ -83,6 +85,7 @@ class PcCourseMessageHandler extends GetxService {
     
     // 1. 初始化时尝试恢复上次的状态
     _restoreState();
+    _restoreVolume();
 
     // 2. 监听核心状态变化，自动持久化
     // 使用 ever 监听 wallCourseEnabled 和 deskCourseEnabled 的变化
@@ -90,6 +93,32 @@ class PcCourseMessageHandler extends GetxService {
     ever(wallCourseEnabled, (_) => _saveState());
     ever(deskCourseEnabled, (_) => _saveState());
     ever(isWallDoubleControl, (_) => _saveState());
+  }
+
+  void _restoreVolume() {
+    try {
+      final wall = _storage.getInt(_wallVolumeKey, defaultValue: 100).clamp(0, 100);
+      final desk = _storage.getInt(_deskVolumeKey, defaultValue: 100).clamp(0, 100);
+      wallVolume.value = wall;
+      deskVolume.value = desk;
+    } catch (_) {
+      wallVolume.value = 100;
+      deskVolume.value = 100;
+    }
+  }
+
+  Future<void> persistVolume({
+    required ServerType serverType,
+    required int volume,
+  }) async {
+    final v = volume.clamp(0, 100);
+    if (serverType == ServerType.wall) {
+      wallVolume.value = v;
+      await _storage.setInt(_wallVolumeKey, v);
+      return;
+    }
+    deskVolume.value = v;
+    await _storage.setInt(_deskVolumeKey, v);
   }
 
   /// 从本地存储恢复状态

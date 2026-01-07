@@ -21,11 +21,11 @@ part 'socket_service_connection_mixin.dart';
 part 'socket_service_send_mixin.dart';
 part 'socket_service_handle_mixin.dart';
 
-const String _courseListCacheKey = 'course_list_cache_v1';
-const String _lastWallServerIpKey = 'socket_last_wall_server_ip_v1';
-const String _lastWallServerPortKey = 'socket_last_wall_server_port_v1';
-const String _lastDesktopServerIpKey = 'socket_last_desktop_server_ip_v1';
-const String _lastDesktopServerPortKey = 'socket_last_desktop_server_port_v1';
+const String _courseListCacheKey = StorageKeys.courseListCache;
+const String _lastWallServerIpKey = StorageKeys.lastWallServerIp;
+const String _lastWallServerPortKey = StorageKeys.lastWallServerPort;
+const String _lastDesktopServerIpKey = StorageKeys.lastDesktopServerIp;
+const String _lastDesktopServerPortKey = StorageKeys.lastDesktopServerPort;
 
 class _ServerEndpointState {
   _ServerEndpointState(this.serverType)

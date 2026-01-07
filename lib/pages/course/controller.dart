@@ -12,7 +12,8 @@ class CourseController extends GetxController {
   SocketService get _socketService => Get.find<SocketService>();
   Storage get _storage => Storage();
 
-  static const String _courseListCacheKey = 'course_list_cache_v1';
+  /// 本地缓存课程列表的 key（统一从 [StorageKeys] 取值）
+  static const String _courseListCacheKey = StorageKeys.courseListCache;
 
   /// 滚动控制器
   final ScrollController scrollController = ScrollController();

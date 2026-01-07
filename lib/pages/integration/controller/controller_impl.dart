@@ -9,9 +9,11 @@ class IntegrationController extends GetxController
         _IntegrationSwitchActionsMixin {
   IntegrationController();
 
-  static const String _deviceConfigsKey = 'integration_device_configs_v1';
+  /// 集成页“设备配置”存储 key（统一来源：[StorageKeys]）
+  static const String _deviceConfigsKey = StorageKeys.integrationDeviceConfigs;
 
-  static const String _switchStatesKey = 'integration_switch_states_v1';
+  /// 集成页“开关状态集合”存储 key（统一来源：[StorageKeys]）
+  static const String _switchStatesKey = StorageKeys.integrationSwitchStates;
 
   /// 设备配置标题列表（用于初始化与展示）
   static const List<String> deviceTitles = <String>[
@@ -59,4 +61,3 @@ class IntegrationController extends GetxController
     super.onClose();
   }
 }
-

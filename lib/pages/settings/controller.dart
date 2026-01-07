@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 class SettingsController extends GetxController {
   SettingsController();
 
   String cacheCountLabel = '';
+  String appVersionLabel = '';
   bool isAbout = false;
   // 内部 PageView 的控制器，用于右侧内容滑动切换
   final PageController innerPageController = PageController(initialPage: 0);
@@ -27,6 +30,7 @@ class SettingsController extends GetxController {
     super.onReady();
     _initData();
     loadCacheCount();
+    unawaited(loadAppVersion());
   }
 
   // @override
@@ -54,6 +58,24 @@ class SettingsController extends GetxController {
       cacheCountLabel = '缓存(0)';
     }
 
+    update(["settings"]);
+  }
+
+  Future<void> loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final v = info.version.trim();
+      final b = info.buildNumber.trim();
+      if (v.isEmpty && b.isEmpty) {
+        appVersionLabel = '';
+      } else if (b.isEmpty) {
+        appVersionLabel = 'v$v';
+      } else {
+        appVersionLabel = 'v$v+$b';
+      }
+    } catch (_) {
+      appVersionLabel = '';
+    }
     update(["settings"]);
   }
 

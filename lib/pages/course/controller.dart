@@ -44,13 +44,7 @@ class CourseController extends GetxController {
   late final List<GlobalKey> sectionKeys = List.generate(types.length, (_) => GlobalKey());
   
   /// 导航栏相关
-  late final List<GlobalKey> dotKeys = List.generate(types.length, (_) => GlobalKey());
-  final GlobalKey navContainerKey = GlobalKey();
-  List<double> navCenters = [];
-  double overlayCenterY = 0.0;
-  int overlayIndex = 0;
   int navAnimDurationMs = 250;
-  bool _navCentersReady = false;
   
   /// 滚动监听节流时间戳
   int _lastScrollMs = 0;
@@ -76,7 +70,6 @@ class CourseController extends GetxController {
     _bindCourseList();
     scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshAllNavCenters();
       if (!isCourseListLoading) {
         _precacheAllSectionsInBackground();
       }
@@ -160,7 +153,6 @@ class CourseController extends GetxController {
 
     update(["course"]);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshAllNavCenters();
       _precacheSectionImages(currentTypeIndex);
       _precacheAdjacentSections(currentTypeIndex);
       _precacheAllSectionsInBackground();
@@ -170,43 +162,38 @@ class CourseController extends GetxController {
   /// 滚动监听 - 更新当前分类高亮（带节流）
   void _onScroll() {
     if (_isNavigating) return;
+    if (!scrollController.hasClients) return;
     
     // 节流：每 80ms 最多执行一次
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastScrollMs < 80) return;
     _lastScrollMs = now;
     
-    // 通过 GlobalKey 判断哪个分类标题最接近顶部
+    // 通过 RenderAbstractViewport 计算“标题对应的滚动偏移”，避免使用 localToGlobal
+    // 造成在居中布局/嵌套 Stack 场景下判断不准的问题。
+    final current = scrollController.position.pixels;
+    final target = current + 150.0;
     int newIndex = 0;
-    double minDistance = double.infinity;
-    
+    double bestOffset = double.negativeInfinity;
+
     for (int i = 0; i < sectionKeys.length; i++) {
-      final ctx = sectionKeys[i].currentContext;
-      if (ctx == null) continue;
-      
-      final box = ctx.findRenderObject() as RenderBox?;
-      if (box == null) continue;
-      
-      // 获取标题相对于屏幕顶部的距离
-      final dy = box.localToGlobal(Offset.zero).dy;
-      
-      // 找到最接近顶部（但不超过太多）的分类
-      if (dy <= 150 && dy > -100) {
-        if (dy.abs() < minDistance) {
-          minDistance = dy.abs();
-          newIndex = i;
-        }
-      } else if (dy < 0 && dy > -500) {
-        // 已经滚过去的分类
+      final object = sectionKeys[i].currentContext?.findRenderObject();
+      if (object == null) continue;
+      final viewport = RenderAbstractViewport.of(object);
+
+      final offset = viewport.getOffsetToReveal(object, 0.0).offset;
+      if (offset <= target && offset >= bestOffset) {
+        bestOffset = offset;
         newIndex = i;
       }
     }
     
     if (newIndex != currentTypeIndex) {
+      final delta = (newIndex - currentTypeIndex).abs();
+      navAnimDurationMs = (140 + delta * 70).clamp(140, 520);
       currentTypeIndex = newIndex;
-      overlayIndex = newIndex;
       update(["course_nav_name"]);
-      _updateOverlayFromCenters();
+      update(["course_nav_overlay"]);
     }
   }
 
@@ -221,17 +208,16 @@ class CourseController extends GetxController {
     _isNavigating = true;
     
     // 计算分类间隔距离
-    //final distance = (index - currentTypeIndex).abs();
+    final distance = (index - currentTypeIndex).abs();
     
     // 根据距离动态计算动画时长：基础 200ms + 每隔一个分类增加 80ms
-    final durationMs = 300/*(200 + distance * 80).clamp(200, 600)*/;
+    final durationMs = (200 + distance * 80).clamp(200, 600);
     
     // 立即更新导航状态（让用户看到响应）
     currentTypeIndex = index;
-    overlayIndex = index;
     navAnimDurationMs = durationMs;
     update(["course_nav_name"]);
-    _updateOverlayFromCenters();
+    update(["course_nav_overlay"]);
     
     unawaited(_precacheSectionImages(index, wait: true));
     final object = sectionKeys[index].currentContext?.findRenderObject();
@@ -245,11 +231,11 @@ class CourseController extends GetxController {
       final offset = targetOffset;
       if (offset == null) return;
       final pos = scrollController.position;
-      scrollController.animateTo(
-        offset.clamp(pos.minScrollExtent, pos.maxScrollExtent),
-        duration: Duration(milliseconds: durationMs),
-        curve: Curves.easeOutCubic,
-      );
+    scrollController.animateTo(
+      offset.clamp(pos.minScrollExtent, pos.maxScrollExtent),
+      duration: Duration(milliseconds: durationMs),
+      curve: Curves.easeInOutCubic,
+    );
     });
 
     Future.delayed(Duration(milliseconds: durationMs + 80), () {
@@ -325,37 +311,4 @@ class CourseController extends GetxController {
     }
   }
 
-  // ============ 导航栏辅助方法 ============
-  
-  void _refreshAllNavCenters() {
-    final navCtx = navContainerKey.currentContext;
-    if (navCtx == null) return;
-    final navBox = navCtx.findRenderObject() as RenderBox?;
-    if (navBox == null) return;
-    final navTop = navBox.localToGlobal(Offset.zero).dy;
-    
-    final centers = List<double>.filled(dotKeys.length, 0);
-    for (int i = 0; i < dotKeys.length; i++) {
-      final dotCtx = dotKeys[i].currentContext;
-      final dotBox = dotCtx?.findRenderObject() as RenderBox?;
-      if (dotBox == null) continue;
-      final dotTop = dotBox.localToGlobal(Offset.zero).dy;
-      final dotHeight = dotBox.size.height;
-      centers[i] = dotTop - navTop + dotHeight / 2;
-    }
-    navCenters = centers;
-    overlayCenterY = centers.isNotEmpty ? centers[overlayIndex] : 0;
-    _navCentersReady = true;
-    update(["course_nav_line", "course_nav_overlay"]);
-  }
-  
-  void _updateOverlayFromCenters() {
-    if (!_navCentersReady) {
-      _refreshAllNavCenters();
-    }
-    if (overlayIndex >= 0 && overlayIndex < navCenters.length) {
-      overlayCenterY = navCenters[overlayIndex];
-      update(["course_nav_overlay"]);
-    }
-  }
 }

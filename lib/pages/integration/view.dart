@@ -75,6 +75,7 @@ class IntegrationPage extends GetView<IntegrationController> {
     ].toColumn(mainAxisAlignment: MainAxisAlignment.center).center();
   }
 
+///右下角连点5次进入配置界面
   Widget _buildEntryPage() {
     return Stack(
       children: [
@@ -87,10 +88,10 @@ class IntegrationPage extends GetView<IntegrationController> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: controller.onDeviceConfigEntryTap,
-            child: Container(
-              width: 120.w,
-              height: 120.w,
-              color: AppTheme.error,
+            child: SizedBox(
+              width: 120.w*1.5,
+              height: 120.h*1.5,
+              //color: AppTheme.error,
             ),
           ),
         ),

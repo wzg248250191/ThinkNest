@@ -22,7 +22,7 @@ class AboutDialogWidget extends StatelessWidget {
       child: SingleChildScrollView(
         child: TextWidget.label(
           aboutContent,
-          fontSize: 32.w,
+          fontSize: 32.sp,
           textStyle: TextStyle(
             letterSpacing: 1.w,
             height: 60.w / 32.w,

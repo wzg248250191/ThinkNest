@@ -271,17 +271,17 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   Future<Map<ServerType, bool>> autoDiscoverAndConnectAll({
     Duration timeout = const Duration(seconds: 5),
   }) async {
-    print('开始自动发现服务器...');
+    DebugUtils.log('开始自动发现服务器...', name: 'socket');
     final servers = await scanForServers(timeout: timeout);
 
     Future<bool> connectIfFound(ServerType serverType) async {
       final discovered = _pickDiscoveredServer(servers, serverType);
       if (discovered == null) {
-        print('未找到${serverType == ServerType.wall ? "墙面" : "桌面"}服务器');
+        DebugUtils.log('未找到${serverType == ServerType.wall ? "墙面" : "桌面"}服务器', name: 'socket');
         return false;
       }
       final ok = await connectToDiscoveredServer(discovered);
-      print('${serverType == ServerType.wall ? "墙面" : "桌面"}服务器连接${ok ? "成功" : "失败"}');
+      DebugUtils.log('${serverType == ServerType.wall ? "墙面" : "桌面"}服务器连接${ok ? "成功" : "失败"}', name: 'socket');
       return ok;
     }
 
@@ -310,7 +310,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     _clientManager.onMessageReceived = _onServerMessageReceived;
 
     _clientManager.onError = (serverType, error) {
-      print('${serverType.displayName}错误: $error');
+      DebugUtils.log('${serverType.displayName}错误: $error', name: 'socket');
       //Get.snackbar('${serverType.displayName}错误', error);
     };
   }
@@ -321,7 +321,10 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     _discoveryService.onServerDiscovered = (server) {
       if (!discoveredServers.contains(server)) {
         discoveredServers.add(server);
-        print('发现${server.serverType == CLIENTEND.WALL ? "墙面" : "桌面"}服务器: ${server.ipAddress}');
+        DebugUtils.log(
+          '发现${server.serverType == CLIENTEND.WALL ? "墙面" : "桌面"}服务器: ${server.ipAddress}',
+          name: 'socket',
+        );
       }
     };
 
@@ -330,7 +333,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     };
 
     _discoveryService.onError = (error) {
-      print('UDP发现错误: $error');
+      DebugUtils.log('UDP发现错误: $error', name: 'socket');
     };
   }
 

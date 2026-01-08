@@ -1,8 +1,7 @@
-// ignore_for_file: avoid_print
-
 import 'dart:typed_data';
 import 'package:think_nest/common/proto/Common.pb.dart';
 import 'message_constants.dart';
+import '../../utils/index.dart';
 
 /// 消息头
 class MessageHead {
@@ -95,7 +94,7 @@ class MessageParser {
         serial: serial,
       );
     } catch (e) {
-      print('解析消息头错误: $e');
+      DebugUtils.log('解析消息头错误: $e', name: 'socket');
       return null;
     }
   }
@@ -125,7 +124,7 @@ class MessageParser {
         body: MessageBody(bodyBytes),
       );
     } catch (e) {
-      print('解析消息体错误: $e');
+      DebugUtils.log('解析消息体错误: $e', name: 'socket');
       return null;
     }
   }

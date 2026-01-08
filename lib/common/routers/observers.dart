@@ -16,23 +16,32 @@ class RouteObservers<R extends Route<dynamic>> extends RouteObserver<R> {
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
-    RoutePages.history.remove(route.settings.name);
+    final name = route.settings.name;
+    if (name == null) return;
+    if (RoutePages.history.isNotEmpty && RoutePages.history.last == name) {
+      RoutePages.history.removeLast();
+      return;
+    }
+    RoutePages.history.remove(name);
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
     if (newRoute != null) {
-      var index = RoutePages.history.indexWhere((element) {
-        return element == oldRoute?.settings.name;
-      });
       var name = newRoute.settings.name ?? '';
       if (name.isNotEmpty) {
-        if (index > 0) {
-          RoutePages.history[index] = name;
-        } else {
+        final oldName = oldRoute?.settings.name;
+        if (oldName == null) {
           RoutePages.history.add(name);
+          return;
         }
+        final index = RoutePages.history.lastIndexOf(oldName);
+        if (index >= 0) {
+          RoutePages.history[index] = name;
+          return;
+        }
+        RoutePages.history.add(name);
       }
     }
   }
@@ -40,7 +49,13 @@ class RouteObservers<R extends Route<dynamic>> extends RouteObserver<R> {
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didRemove(route, previousRoute);
-    RoutePages.history.remove(route.settings.name);
+    final name = route.settings.name;
+    if (name == null) return;
+    if (RoutePages.history.isNotEmpty && RoutePages.history.last == name) {
+      RoutePages.history.removeLast();
+      return;
+    }
+    RoutePages.history.remove(name);
   }
 
   @override

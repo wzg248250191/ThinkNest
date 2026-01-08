@@ -7,43 +7,43 @@ import 'package:think_nest/global.dart';
 
 import 'common/index.dart';
 
-void main() async {
+/// 应用启动入口
+///
+/// 说明：
+/// - 先确保 Flutter 引擎/插件绑定完成，再进行全局初始化
+/// - 在 runApp 前完成横屏锁定与沉浸式/状态栏样式配置，避免首帧 UI 抖动
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await Global.init();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
   ]);
+
+  // 设置沉浸式布局：让内容延伸到状态栏/导航栏区域
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
+
+  // 统一配置系统 UI 样式：首帧前设置可减少闪烁与二次布局
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.black,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
   runApp(const MyApp());
 }
 
-class MyApp extends StatefulWidget {
+/// 应用根组件
+///
+/// 说明：
+/// - 作为全局主题/路由/适配的容器，本身不持有状态，使用 StatelessWidget 更轻量
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  @override
-  void initState() {
-    super.initState();
-    // 设置全屏沉浸式布局，让app内容延伸到状态栏和导航栏区域
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.edgeToEdge,
-    );
-    
-    // 设置状态栏样式为透明，悬浮在app上
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent, // 状态栏背景透明
-        statusBarIconBrightness: Brightness.dark, // 状态栏图标为深色（亮色背景时使用）
-        statusBarBrightness: Brightness.light, // iOS状态栏样式
-        systemNavigationBarColor: Colors.black, // 导航栏颜色
-        systemNavigationBarIconBrightness: Brightness.light, // 导航栏图标亮度
-      ),
-    );
-  }
-
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
@@ -68,6 +68,7 @@ class _MyAppState extends State<MyApp> {
           darkTheme: darkTheme,
 
           // 路由
+          // 启动直接进入主页面：通过主页面上的启动遮罩完成“完全热启动”预热
           initialRoute: RouteNames.systemMain,
           getPages: RoutePages.list,
           navigatorObservers: [RoutePages.observer],
@@ -100,4 +101,3 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-

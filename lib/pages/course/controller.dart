@@ -28,6 +28,12 @@ class CourseController extends GetxController {
 
   bool isCourseListLoading = true;
 
+  /// 是否启用“全量构建全部课程”的模式
+  /// 说明：
+  /// - true：课程页会一次性构建全部课程卡片（不走 Sliver 懒构建）
+  /// - 目的：进入课程页后，滚动/跳转主要只改变可视位置，避免边滑边构建造成卡顿
+  bool _fullBuildAllModeEnabled = false;
+
   Worker? _courseListWorker;
   Worker? _courseListLoadingWorker;
   
@@ -48,6 +54,15 @@ class CourseController extends GetxController {
   
   /// 滚动监听节流时间戳
   int _lastScrollMs = 0;
+
+  /// 课程清单应用批次标记，用于取消过期的“过滤/分组”任务，避免阻塞 UI
+  int _applyCourseListGeneration = 0;
+
+  /// 是否启用课程封面预缓存
+  /// 说明：
+  /// - 预缓存会触发图片解码，可能与首屏逐个渲染抢占主线程
+  /// - 为验证“首屏不卡顿”目标，这里默认关闭；如需恢复可改为 true
+  static const bool _enableCourseCoverPrecache = false;
 
   // ============ 布局常量（供 view.dart 使用）============
   static const int crossAxisCount = 5;
@@ -100,7 +115,7 @@ class CourseController extends GetxController {
     if (cached.isEmpty) {
       return;
     }
-    _applyCourseList(cached);
+    unawaited(_applyCourseList(cached));
   }
 
   @override
@@ -116,23 +131,23 @@ class CourseController extends GetxController {
   void _bindCourseList() {
     isCourseListLoading = _socketService.isCourseListLoading.value;
     if (!isCourseListLoading) {
-      _applyCourseList(_socketService.courseList);
+      unawaited(_applyCourseList(_socketService.courseList));
     }
 
     _courseListWorker = ever<List<String>>(_socketService.courseList, (list) {
       if (_socketService.isCourseListLoading.value) {
         return;
       }
-      _applyCourseList(list);
+      unawaited(_applyCourseList(list));
     });
 
     _courseListLoadingWorker = ever<bool>(_socketService.isCourseListLoading, (loading) {
       isCourseListLoading = loading;
       if (loading) {
-        update(["course"]);
+        update(["course_list", "course_sync_banner"]);
         return;
       }
-      _applyCourseList(_socketService.courseList);
+      unawaited(_applyCourseList(_socketService.courseList));
     });
   }
 
@@ -140,22 +155,48 @@ class CourseController extends GetxController {
   /// 说明：
   /// - 只展示服务端允许的课程
   /// - 更新后触发导航定位刷新，并预缓存当前/相邻分类的首屏图片，减少首次显示与切换卡顿
-  void _applyCourseList(List<String> serverCourseList) {
-    final allowed = serverCourseList.where(coursesByName.containsKey).toSet();
+  Future<void> _applyCourseList(List<String> serverCourseList) async {
+    final int generation = ++_applyCourseListGeneration;
 
-    for (final t in types) {
+    final allowed = serverCourseList.where(coursesByName.containsKey).toSet();
+    final next = <String, List<String>>{};
+
+    for (int i = 0; i < types.length; i++) {
+      if (generation != _applyCourseListGeneration) {
+        return;
+      }
+
+      final t = types[i];
       final all = _allCourseNamesByType[t] ?? const <String>[];
-      typeCourseNames[t] = <String>[
-        for (final name in all)
-          if (allowed.contains(name)) name,
-      ];
+      final list = <String>[];
+      for (final name in all) {
+        if (allowed.contains(name)) {
+          list.add(name);
+        }
+      }
+      next[t] = list;
+
+      if (i.isOdd) {
+        await Future.delayed(Duration.zero);
+      }
     }
 
-    update(["course"]);
+    if (generation != _applyCourseListGeneration) {
+      return;
+    }
+
+    typeCourseNames
+      ..clear()
+      ..addAll(next);
+
+    update(["course_list", "course_sync_banner"]);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _precacheSectionImages(currentTypeIndex);
-      _precacheAdjacentSections(currentTypeIndex);
-      _precacheAllSectionsInBackground();
+      // 首屏优先：默认不进行课程封面预缓存，避免与渲染抢占解码资源
+      if (_enableCourseCoverPrecache) {
+        _precacheSectionImages(currentTypeIndex);
+        _precacheAdjacentSections(currentTypeIndex);
+      }
+      // 关闭全量后台预缓存：优先保证首屏交互与动画流畅
     });
   }
 
@@ -219,61 +260,100 @@ class CourseController extends GetxController {
     update(["course_nav_name"]);
     update(["course_nav_overlay"]);
     
-    unawaited(_precacheSectionImages(index, wait: true));
-    final object = sectionKeys[index].currentContext?.findRenderObject();
-    double? targetOffset;
-    if (object != null) {
-      final viewport = RenderAbstractViewport.of(object);
-      targetOffset = viewport.getOffsetToReveal(object, 0.0).offset;
+    // 导航跳转前的预缓存可能触发解码抢占，默认关闭
+    if (_enableCourseCoverPrecache) {
+      unawaited(_precacheSectionImages(index, wait: true));
     }
-    Future.delayed(const Duration(milliseconds: 16), () {
+    void animateToTargetWithRetry(int retry) {
       if (!scrollController.hasClients) return;
-      final offset = targetOffset;
-      if (offset == null) return;
+      final object = sectionKeys[index].currentContext?.findRenderObject();
+      if (object == null) {
+        if (retry <= 0) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          animateToTargetWithRetry(retry - 1);
+        });
+        return;
+      }
+      final viewport = RenderAbstractViewport.of(object);
+      final offset = viewport.getOffsetToReveal(object, 0.0).offset;
       final pos = scrollController.position;
-    scrollController.animateTo(
-      offset.clamp(pos.minScrollExtent, pos.maxScrollExtent),
-      duration: Duration(milliseconds: durationMs),
-      curve: Curves.easeInOutCubic,
-    );
+      scrollController.animateTo(
+        offset.clamp(pos.minScrollExtent, pos.maxScrollExtent),
+        duration: Duration(milliseconds: durationMs),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      animateToTargetWithRetry(12);
     });
 
     Future.delayed(Duration(milliseconds: durationMs + 80), () {
       _isNavigating = false;
       update(["course_nav_overlay"]);
-      _precacheAdjacentSections(index);
+      if (_enableCourseCoverPrecache) {
+        _precacheAdjacentSections(index);
+      }
     });
   }
   
   /// 预缓存指定分类的课程图片（返回 Future 可等待完成）
-  Future<void> _precacheSectionImages(int index, {bool wait = false}) async {
+  Future<void> _precacheSectionImages(int index, {bool wait = false}) {
+    if (!_enableCourseCoverPrecache) {
+      return Future.value();
+    }
     final ctx = Get.context;
-    if (ctx == null) return;
-    
+    if (ctx == null) return Future.value();
+
     final typeName = types[index];
     final courses = typeCourseNames[typeName] ?? [];
-    
-    // 只预缓存前 10 张图片（首屏可见的）
-    final count = courses.length.clamp(0, 10);
-    final futures = <Future>[];
-    
-    for (int i = 0; i < count; i++) {
-      final imgPath = 'assets/images/courses/${courses[i]}.png';
-      final future = precacheImage(AssetImage(imgPath), ctx);
-      if (wait) futures.add(future);
+
+    // 分两档策略：
+    // - 首屏/后台：只预缓存更小的数量，并且分批让出帧，避免瞬时解码导致动画卡顿
+    // - 导航点击（wait=true）：预缓存更多图片，并允许短时间等待提升到位后的流畅度
+    final int targetMax = wait ? 10 : 6;
+    final int count = courses.length.clamp(0, targetMax);
+
+    if (count <= 0) {
+      return Future.value();
     }
-    
-    // 如果需要等待，则等待所有图片加载完成
-    if (wait && futures.isNotEmpty) {
-      await Future.wait(futures).timeout(
-        const Duration(milliseconds: 300), // 最多等 300ms
-        onTimeout: () => [], // 超时则不等了
+
+    if (wait) {
+      final futures = <Future<void>>[];
+      for (int i = 0; i < count; i++) {
+        // 注意：目录大小写需与真实资源一致，避免 Android 侧资源找不到
+        final imgPath = '${AssetsImages.courseCoversDir}${courses[i]}.png';
+        futures.add(precacheImage(AssetImage(imgPath), ctx));
+      }
+      return Future.wait<void>(futures).timeout(
+        const Duration(milliseconds: 300),
+        onTimeout: () => const <void>[],
       );
     }
+
+    void step(int i) {
+      if (i >= count) return;
+
+      // 注意：目录大小写需与真实资源一致，避免 Android 侧资源找不到
+      final imgPath = '${AssetsImages.courseCoversDir}${courses[i]}.png';
+      precacheImage(AssetImage(imgPath), ctx);
+
+      if (i.isOdd) {
+        Future.delayed(const Duration(milliseconds: 16), () => step(i + 1));
+      } else {
+        step(i + 1);
+      }
+    }
+
+    step(0);
+    return Future.value();
   }
   
-  /// 预缓存相邻分类的图片
+  /// 预缓存相邻分类的图片（只预执行当前批次，后续批次会覆盖前一批次）
   void _precacheAdjacentSections(int index) {
+    if (!_enableCourseCoverPrecache) {
+      return;
+    }
     // 使用 Future.microtask 避免阻塞当前帧
     Future.microtask(() {
       if (index > 0) _precacheSectionImages(index - 1);
@@ -283,32 +363,153 @@ class CourseController extends GetxController {
   
   /// 🚀 后台预缓存所有分类的首屏图片（页面初始化时调用）
   void _precacheAllSectionsInBackground() {
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _precacheAllSectionsStep(0);
-    });
+    // 策略调整：关闭全量后台预缓存
+    // 说明：
+    // - 全量扫描会触发大量图片解码/栅格化，容易在启动阶段造成明显卡顿
+    // - 仅保留“当前分类 + 相邻分类”的小范围预缓存
+    return;
   }
 
-  void _precacheAllSectionsStep(int index) {
-    if (!scrollController.hasClients) return;
-    if (index < 0 || index >= types.length) return;
-    final ctx = Get.context;
-    if (ctx == null) return;
-
-    final typeName = types[index];
-    final courses = typeCourseNames[typeName] ?? [];
-    _precacheCourses(ctx, courses);
-
-    Future.delayed(const Duration(milliseconds: 16), () {
-      _precacheAllSectionsStep(index + 1);
-    });
+  /// 启用“全量构建全部课程”模式
+  /// 说明：
+  /// - 该模式下不再做首屏裁剪、渐进展开、逐行展开
+  /// - 由 Splash 在启动期打开，保证进入课程页后滚动/跳转更稳定
+  void enableFullBuildAllMode() {
+    if (_fullBuildAllModeEnabled) return;
+    _fullBuildAllModeEnabled = true;
   }
 
-  void _precacheCourses(BuildContext ctx, List<String> courses) {
-    final count = courses.length.clamp(0, 10);
-    for (int i = 0; i < count; i++) {
-      final imgPath = 'assets/images/courses/${courses[i]}.png';
-      precacheImage(AssetImage(imgPath), ctx);
+  /// Splash 期间预加载：等待课程清单稳定，并预缓存课程图片资源
+  /// 说明：
+  /// - 预缓存不依赖 BuildContext，避免跨 async gap 使用 context 的风险
+  /// - 预缓存会尽量按卡片实际尺寸做 ResizeImage，减少内存压力
+  Future<void> preloadForSplash() async {
+    // 绑定课程清单监听（避免 controller 提前创建却没有进入课程页，导致未绑定 socket）
+    if (_courseListWorker == null || _courseListLoadingWorker == null) {
+      _bindCourseList();
     }
+
+    // 等待一次可用的课程清单（优先等服务端；超时则使用本地缓存已回显的数据）
+    final int startMs = DateTime.now().millisecondsSinceEpoch;
+    const int timeoutMs = 6500;
+    while (DateTime.now().millisecondsSinceEpoch - startMs < timeoutMs) {
+      final bool loading = _socketService.isCourseListLoading.value;
+      final bool hasServerList = _socketService.courseList.isNotEmpty;
+      final bool hasLocalReady = typeCourseNames.isNotEmpty &&
+          typeCourseNames.values.any((e) => e.isNotEmpty);
+
+      if (!loading && hasServerList) {
+        await _applyCourseList(_socketService.courseList);
+        break;
+      }
+      if (hasLocalReady) {
+        break;
+      }
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+
+    // 预缓存页面固定资源（分割线、卡片背景等）
+    await _precacheAssetImagesForCoursePage();
+    // 预缓存所有课程封面
+    await _precacheAllCourseCovers();
+  }
+
+  /// 预缓存课程页使用的固定资源图片
+  Future<void> _precacheAssetImagesForCoursePage() async {
+    final double dpr = _devicePixelRatioForPrecache();
+    final List<ImageProvider> providers = <ImageProvider>[
+      const AssetImage(AssetsImages.courseSplitPng),
+      const AssetImage(AssetsImages.courseBgPng),
+    ];
+
+    for (final p in providers) {
+      try {
+        await _precacheImageProvider(p, devicePixelRatio: dpr);
+      } catch (_) {
+        // 忽略预缓存异常，避免启动期卡死
+      }
+    }
+  }
+
+  /// 预缓存所有课程封面（按卡片实际像素尺寸做 ResizeImage）
+  Future<void> _precacheAllCourseCovers() async {
+    // 根据课程页布局常量估算单个卡片宽度，从而推导封面解码尺寸
+    final double dpr = _devicePixelRatioForPrecache();
+    final double listWidth = 1480.w;
+    final double contentWidth = listWidth - 2 * listPaddingHorizontal;
+    final double totalSpacing = (crossAxisCount - 1) * crossAxisSpacing;
+    final double cellWidth =
+        ((contentWidth - totalSpacing) / crossAxisCount).clamp(1.0, double.infinity);
+    final double imageSide = cellWidth * 0.887;
+    final int targetPx = (imageSide * dpr).round().clamp(1, 4096);
+
+    final List<String> allCourseNames = <String>[];
+    for (final t in types) {
+      final list = typeCourseNames[t] ?? const <String>[];
+      if (list.isNotEmpty) {
+        allCourseNames.addAll(list);
+      }
+    }
+
+    for (int i = 0; i < allCourseNames.length; i++) {
+      final String name = allCourseNames[i];
+      // 注意：目录大小写需与真实资源一致，避免 Android 侧资源找不到
+      final String imgPath = '${AssetsImages.courseCoversDir}$name.png';
+      try {
+        final ImageProvider provider = ResizeImage(
+          AssetImage(imgPath),
+          width: targetPx,
+          height: targetPx,
+        );
+        await _precacheImageProvider(provider, devicePixelRatio: dpr);
+      } catch (_) {
+        // 忽略单个资源失败，继续预缓存后续图片
+      }
+      // 分批让出帧，避免启动阶段长时间占用 UI 线程
+      if (i % 12 == 11) {
+        await Future.delayed(Duration.zero);
+      }
+    }
+  }
+
+  /// 获取启动期预缓存用的设备像素比
+  /// 说明：不依赖 BuildContext，避免跨异步间隙使用 context 的风险
+  double _devicePixelRatioForPrecache() {
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    if (views.isEmpty) {
+      return 1.0;
+    }
+    return views.first.devicePixelRatio;
+  }
+
+  /// 预缓存指定 ImageProvider（不依赖 BuildContext）
+  /// 说明：通过 resolve + ImageStreamListener 等待图片解码完成
+  Future<void> _precacheImageProvider(
+    ImageProvider provider, {
+    required double devicePixelRatio,
+  }) {
+    final Completer<void> completer = Completer<void>();
+    final ImageConfiguration config = ImageConfiguration(devicePixelRatio: devicePixelRatio);
+    final ImageStream stream = provider.resolve(config);
+
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (ImageInfo image, bool synchronousCall) {
+        stream.removeListener(listener);
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      },
+      onError: (Object error, StackTrace? stackTrace) {
+        stream.removeListener(listener);
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      },
+    );
+
+    stream.addListener(listener);
+    return completer.future;
   }
 
 }

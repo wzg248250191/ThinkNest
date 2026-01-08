@@ -70,7 +70,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
-    - assets/images/courses/
+    - assets/images/Courses/
     - assets/svgs/
     - assets/svgs/course/
     - assets/svgs/settings/

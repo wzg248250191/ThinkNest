@@ -1,5 +1,3 @@
-// ignore_for_file: deprecated_member_use
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -81,7 +79,7 @@ class ToastUtils {
               children: [
                 ModalBarrier(
                   dismissible: false,
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                 ),
                 Center(
                   child: Material(
@@ -111,7 +109,7 @@ class ToastUtils {
                                 child: CircularProgressIndicator(
                                   strokeWidth: 4.sp,
                                   backgroundColor:
-                                      CustomAppColors.text.withOpacity(0.2),
+                                      CustomAppColors.text.withValues(alpha: 0.2),
                                   valueColor: AlwaysStoppedAnimation<Color>(
                                     CustomAppColors.text,
                                   ),

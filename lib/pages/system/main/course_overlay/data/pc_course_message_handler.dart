@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:get/get.dart';
 import 'package:think_nest/common/index.dart';
@@ -124,41 +123,53 @@ class PcCourseMessageHandler extends GetxService {
   /// 从本地存储恢复状态
   void _restoreState() {
     try {
-      final String jsonStr = _storage.getString(_storageKey);
-      if (jsonStr.isNotEmpty) {
-        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr);
-        final model = ActiveCourseModel.fromJson(jsonMap);
-
-        final now = DateTime.now();
-        final savedAtMs = model.savedAtMs;
-        if (savedAtMs <= 0) {
-          _storage.remove(_storageKey);
-          currentCourseId.value = null;
-          wallCourseEnabled.value = false;
-          deskCourseEnabled.value = false;
-          isWallDoubleControl.value = false;
-          return;
-        }
-        final savedAt = DateTime.fromMillisecondsSinceEpoch(savedAtMs);
-        if (!_isSameLocalDay(savedAt, now)) {
-          _storage.remove(_storageKey);
-          currentCourseId.value = null;
-          wallCourseEnabled.value = false;
-          deskCourseEnabled.value = false;
-          isWallDoubleControl.value = false;
-          return;
-        }
-
-        print('📦 恢复课程状态: ${model.courseId}, 墙面: ${model.wallEnabled}, 桌面: ${model.deskEnabled}, 双控: ${model.doubleControl}');
-
-        // 恢复数据
-        currentCourseId.value = model.courseId;
-        wallCourseEnabled.value = model.wallEnabled;
-        deskCourseEnabled.value = model.deskEnabled;
-        isWallDoubleControl.value = model.doubleControl;
+      final dynamic decoded = _storage.getJson(_storageKey);
+      if (decoded == null) return;
+      if (decoded is! Map) {
+        // 防御：存储内容结构异常时清理脏数据，避免后续解析与状态回放出错
+        _storage.remove(_storageKey);
+        currentCourseId.value = null;
+        wallCourseEnabled.value = false;
+        deskCourseEnabled.value = false;
+        isWallDoubleControl.value = false;
+        return;
       }
+      final model = ActiveCourseModel.fromJson(decoded.cast<String, dynamic>());
+
+      final now = DateTime.now();
+      final savedAtMs = model.savedAtMs;
+      if (savedAtMs <= 0) {
+        _storage.remove(_storageKey);
+        currentCourseId.value = null;
+        wallCourseEnabled.value = false;
+        deskCourseEnabled.value = false;
+        isWallDoubleControl.value = false;
+        return;
+      }
+      final savedAt = DateTime.fromMillisecondsSinceEpoch(savedAtMs);
+      if (!_isSameLocalDay(savedAt, now)) {
+        _storage.remove(_storageKey);
+        currentCourseId.value = null;
+        wallCourseEnabled.value = false;
+        deskCourseEnabled.value = false;
+        isWallDoubleControl.value = false;
+        return;
+      }
+
+      // 仅在 Debug 下输出恢复信息，避免 Release 噪音与额外开销
+      DebugUtils.log(
+        '📦 恢复课程状态: ${model.courseId}, 墙面: ${model.wallEnabled}, 桌面: ${model.deskEnabled}, 双控: ${model.doubleControl}',
+        name: 'course',
+      );
+
+      // 恢复数据
+      currentCourseId.value = model.courseId;
+      wallCourseEnabled.value = model.wallEnabled;
+      deskCourseEnabled.value = model.deskEnabled;
+      isWallDoubleControl.value = model.doubleControl;
     } catch (e) {
-      print('❌ 恢复课程状态失败: $e');
+      // 仅在 Debug 下输出异常，避免 Release 噪音与额外开销
+      DebugUtils.log('❌ 恢复课程状态失败: $e', name: 'course');
       // 出错时清除脏数据
       _storage.remove(_storageKey);
     }
@@ -173,7 +184,8 @@ class PcCourseMessageHandler extends GetxService {
 
     // 如果课程ID为空，或者（墙面和桌面都关闭了），则视为课程结束，清除存储
     if (id == null || (!wall && !desk)) {
-      print('🗑️ 课程已结束或未开始，清除本地状态');
+      // 仅在 Debug 下输出清理信息，避免 Release 噪音与额外开销
+      DebugUtils.log('🗑️ 课程已结束或未开始，清除本地状态', name: 'course');
       _storage.remove(_storageKey);
       return;
     }
@@ -189,7 +201,8 @@ class PcCourseMessageHandler extends GetxService {
     
     // 使用 setJson (实际上是 setString + jsonEncode)
     _storage.setJson(_storageKey, model.toJson());
-    print('💾 保存课程状态: $id, 墙面: $wall, 桌面: $desk, 双控: $doubleCtrl');
+    // 仅在 Debug 下输出保存信息，避免 Release 噪音与额外开销
+    DebugUtils.log('💾 保存课程状态: $id, 墙面: $wall, 桌面: $desk, 双控: $doubleCtrl', name: 'course');
   }
 
   void attachCourse(String courseId) {

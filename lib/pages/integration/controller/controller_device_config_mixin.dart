@@ -39,8 +39,14 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
   /// - 若本地无数据，会按默认标题集合生成默认配置
   /// - 读取完成后会同步 enabled，并刷新配置页 UI
   Future<void> loadDeviceConfigs() async {
-    final String raw = Storage().getString(IntegrationController._deviceConfigsKey);
-    if (raw.isEmpty) {
+    dynamic decoded;
+    try {
+      // 防御：本地 Json 可能被异常写入，解析失败时按“无本地配置”处理
+      decoded = Storage().getJson(IntegrationController._deviceConfigsKey);
+    } catch (_) {
+      decoded = null;
+    }
+    if (decoded == null) {
       deviceConfigs
         ..clear()
         ..addEntries(
@@ -53,8 +59,10 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     }
 
     try {
-      final dynamic decoded = jsonDecode(raw);
-      if (decoded is Map) {
+      if (decoded is! Map) {
+        // 防御：结构不是 Map 时不复用旧配置，直接清空，后续会补齐默认项
+        deviceConfigs.clear();
+      } else {
         final map = decoded.cast<String, dynamic>();
         deviceConfigs.clear();
         for (final entry in map.entries) {

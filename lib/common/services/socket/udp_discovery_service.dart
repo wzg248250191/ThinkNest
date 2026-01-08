@@ -3,7 +3,6 @@ import 'dart:io';
 
 import '../../index.dart';
 
-
 /// UDP发现服务
 /// 用于自动发现局域网内的PC服务器
 class UdpDiscoveryService {
@@ -51,7 +50,7 @@ class UdpDiscoveryService {
     int retryCount = 3,
   }) async {
     if (_isScanning) {
-      print('UDP发现服务正在扫描中...');
+      DebugUtils.log('UDP发现服务正在扫描中...', name: 'socket');
       return _discoveredServers;
     }
 
@@ -65,13 +64,13 @@ class UdpDiscoveryService {
       _socket!.broadcastEnabled = true;
       _discoveryDoneCompleter = Completer<void>();
       
-      print('UDP发现服务已启动，本地端口: ${_socket!.port}');
+      DebugUtils.log('UDP发现服务已启动，本地端口: ${_socket!.port}', name: 'socket');
       
       // 监听响应
       _socket!.listen(
         _onDataReceived,
         onError: (error) {
-          print('UDP接收错误: $error');
+          DebugUtils.log('UDP接收错误: $error', name: 'socket');
           onError?.call('UDP接收错误: $error');
         },
       );
@@ -87,7 +86,7 @@ class UdpDiscoveryService {
       await _discoveryDoneCompleter!.future;
       
     } catch (e) {
-      print('UDP发现服务错误: $e');
+      DebugUtils.log('UDP发现服务错误: $e', name: 'socket');
       onError?.call('UDP发现服务错误: $e');
     } finally {
       timeoutTimer?.cancel();
@@ -134,13 +133,13 @@ class UdpDiscoveryService {
         udpEchoPort,
       );
       
-      print('已发送UDP发现请求，字节数: $sent');
+      DebugUtils.log('已发送UDP发现请求，字节数: $sent', name: 'socket');
       
       // 同时尝试发送到常见网段
       _sendToCommonSubnets(data);
       
     } catch (e) {
-      print('发送UDP发现请求失败: $e');
+      DebugUtils.log('发送UDP发现请求失败: $e', name: 'socket');
     }
   }
 
@@ -195,12 +194,12 @@ class UdpDiscoveryService {
         );
 
         _discoveredServers.add(server);
-        print('发现服务器: $server');
+        DebugUtils.log('发现服务器: $server', name: 'socket');
         onServerDiscovered?.call(server);
         _tryCompleteDiscoveryEarly();
       }
     } catch (e) {
-      print('解析UDP响应失败: $e');
+      DebugUtils.log('解析UDP响应失败: $e', name: 'socket');
     }
   }
 
@@ -218,7 +217,7 @@ class UdpDiscoveryService {
     _isScanning = false;
     _socket?.close();
     _socket = null;
-    print('UDP发现服务已停止');
+    DebugUtils.log('UDP发现服务已停止', name: 'socket');
   }
 
   /// 手动停止扫描

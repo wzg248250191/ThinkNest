@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import '../../index.dart';
 
-
 /// Socket连接状态
 enum SocketState {
   /// 未连接
@@ -87,7 +86,7 @@ class SocketClient {
   /// - [autoReconnect] 为 false 时：连接失败/断开不会触发自动重连（适合启动阶段尝试）
   Future<bool> connect(String host, int port, {bool autoReconnect = true}) async {
     if (_state == SocketState.connected) {
-      print('Socket已经连接');
+      DebugUtils.log('Socket已经连接', name: 'socket');
       return true;
     }
 
@@ -120,7 +119,7 @@ class SocketClient {
   Future<bool> _doConnect() async {
     try {
       _updateState(SocketState.connecting);
-      print('正在连接到服务器 $_host:$_port...');
+      DebugUtils.log('正在连接到服务器 $_host:$_port...', name: 'socket');
 
       _socket = await Socket.connect(
         _host!,
@@ -128,7 +127,7 @@ class SocketClient {
         timeout: Duration(milliseconds: MessageConstants.timeOut),
       );
 
-      print('Socket连接成功: ${_socket?.remoteAddress.address}:${_socket?.remotePort}');
+      DebugUtils.log('Socket连接成功: ${_socket?.remoteAddress.address}:${_socket?.remotePort}', name: 'socket');
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
       
@@ -148,7 +147,7 @@ class SocketClient {
       
       return true;
     } catch (e) {
-      print('Socket连接失败: $e');
+      DebugUtils.log('Socket连接失败: $e', name: 'socket');
       _updateState(SocketState.failed);
       onError?.call('连接失败: $e');
       
@@ -168,9 +167,9 @@ class SocketClient {
   /// - 发送前会进行连接状态校验，避免写入已断开的 Socket
   void sendMessage(MESSAGE message) {
     if (!isConnected) {
-      print('❌ Socket未连接，无法发送消息');
-      print('   当前状态: $_state');
-      print('   目标地址: $_host:$_port');
+      DebugUtils.log('❌ Socket未连接，无法发送消息', name: 'socket');
+      DebugUtils.log('   当前状态: $_state', name: 'socket');
+      DebugUtils.log('   目标地址: $_host:$_port', name: 'socket');
       onError?.call('Socket未连接');
       return;
     }
@@ -181,27 +180,27 @@ class SocketClient {
       
       if (!isHeartbeat) {
         // 打印消息详情（非心跳消息）
-        print('======== 发送消息 ========');
-        print('目标服务器: $_host:$_port');
-        print('消息类型: ${message.mSGtype}');
+        DebugUtils.log('======== 发送消息 ========', name: 'socket');
+        DebugUtils.log('目标服务器: $_host:$_port', name: 'socket');
+        DebugUtils.log('消息类型: ${message.mSGtype}', name: 'socket');
         
         if (message.hasServerMessage()) {
           final sm = message.serverMessage;
-          print('ServerMessage:');
-          print('  - serverBehaviour: ${sm.serverBehaviour}');
-          print('  - gameName: "${sm.gameName}"');
-          print('  - on: ${sm.on}');
+          DebugUtils.log('ServerMessage:', name: 'socket');
+          DebugUtils.log('  - serverBehaviour: ${sm.serverBehaviour}', name: 'socket');
+          DebugUtils.log('  - gameName: "${sm.gameName}"', name: 'socket');
+          DebugUtils.log('  - on: ${sm.on}', name: 'socket');
           if (sm.hasVolumeValue()) {
-            print('  - volumeValue: ${sm.volumeValue}');
+            DebugUtils.log('  - volumeValue: ${sm.volumeValue}', name: 'socket');
           }
         }
         
         if (message.hasUnityMessage()) {
           final um = message.unityMessage;
-          print('UnityMessage:');
-          print('  - unityMSGtype: ${um.unityMSGtype}');
+          DebugUtils.log('UnityMessage:', name: 'socket');
+          DebugUtils.log('  - unityMSGtype: ${um.unityMSGtype}', name: 'socket');
           if (um.hasOperation()) {
-            print('  - operation: ${um.operation}');
+            DebugUtils.log('  - operation: ${um.operation}', name: 'socket');
           }
         }
       }
@@ -209,19 +208,22 @@ class SocketClient {
       final bytes = MessageParser.encodeMessage(message);
       
       if (!isHeartbeat) {
-        print('编码后字节数: ${bytes.length}');
-        print('消息头: ${bytes.sublist(0, 13).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        DebugUtils.log('编码后字节数: ${bytes.length}', name: 'socket');
+        DebugUtils.log(
+          '消息头: ${bytes.sublist(0, 13).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}',
+          name: 'socket',
+        );
       }
       
       _sendBuffer.add(bytes);
       _processSendBuffer(silent: isHeartbeat);
       
       if (!isHeartbeat) {
-        print('✅ 消息已发送');
-        print('==========================');
+        DebugUtils.log('✅ 消息已发送', name: 'socket');
+        DebugUtils.log('==========================', name: 'socket');
       }
     } catch (e) {
-      print('❌ 发送消息失败: $e');
+      DebugUtils.log('❌ 发送消息失败: $e', name: 'socket');
       onError?.call('发送消息失败: $e');
     }
   }
@@ -243,10 +245,13 @@ class SocketClient {
         _socket?.add(bytes);
         
         if (!silent) {
-         // print('📤 数据已写入Socket，字节数: ${bytes.length}');
+          // DebugUtils.log('📤 数据已写入Socket，字节数: ${bytes.length}', name: 'socket');
           // 打印完整的十六进制数据（用于调试）
           if (bytes.length < 200) {
-           // print('   HEX: ${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+            // DebugUtils.log(
+            //   '   HEX: ${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}',
+            //   name: 'socket',
+            // );
           }
         }
       }
@@ -256,26 +261,26 @@ class SocketClient {
       if (socket != null) {
         // 检查 Socket 状态
         if (!silent) {
-          print('📡 Socket状态检查:');
-          print('   - remoteAddress: ${socket.remoteAddress.address}');
-          print('   - remotePort: ${socket.remotePort}');
-          print('   - done: 正在刷新...');
+          DebugUtils.log('📡 Socket状态检查:', name: 'socket');
+          DebugUtils.log('   - remoteAddress: ${socket.remoteAddress.address}', name: 'socket');
+          DebugUtils.log('   - remotePort: ${socket.remotePort}', name: 'socket');
+          DebugUtils.log('   - done: 正在刷新...', name: 'socket');
         }
         
         socket.flush().then((_) {
           if (!silent) {
-            //print('📤 Socket缓冲区已刷新，数据已发送到网络');
+            // DebugUtils.log('📤 Socket缓冲区已刷新，数据已发送到网络', name: 'socket');
           }
         }).catchError((e) {
-          print('❌ 刷新Socket缓冲区失败: $e');
-          print('   可能连接已断开');
+          DebugUtils.log('❌ 刷新Socket缓冲区失败: $e', name: 'socket');
+          DebugUtils.log('   可能连接已断开', name: 'socket');
         });
       } else {
-        print('❌ Socket 为 null，无法发送');
+        DebugUtils.log('❌ Socket 为 null，无法发送', name: 'socket');
       }
       
     } catch (e) {
-      print('❌ 发送数据出错: $e');
+      DebugUtils.log('❌ 发送数据出错: $e', name: 'socket');
       onError?.call('发送数据出错: $e');
     }
   }
@@ -286,7 +291,7 @@ class SocketClient {
       _receiveBuffer.addAll(data);
       _processReceiveBuffer();
     } catch (e) {
-      print('处理接收数据出错: $e');
+      DebugUtils.log('处理接收数据出错: $e', name: 'socket');
       onError?.call('处理接收数据出错: $e');
     }
   }
@@ -307,14 +312,14 @@ class SocketClient {
         
         final head = MessageParser.unParseHead(headerBytes);
         if (head == null) {
-          print('解析消息头失败');
+          DebugUtils.log('解析消息头失败', name: 'socket');
           _receiveBuffer.clear();
           break;
         }
 
         // 验证魔术头
         if (head.header != MessageConstants.header) {
-          print('无效的消息头: ${head.header}');
+          DebugUtils.log('无效的消息头: ${head.header}', name: 'socket');
           _receiveBuffer.clear();
           break;
         }
@@ -341,13 +346,13 @@ class SocketClient {
         if (messageData != null) {
           // 解析protobuf消息
           final message = MESSAGE.fromBuffer(messageData.body.buffBytes);
-          print('收到消息，类型: ${message.mSGtype}');
+          DebugUtils.log('收到消息，类型: ${message.mSGtype}', name: 'socket');
           onMessageReceived?.call(message);
         } else {
-          print('解析消息数据失败');
+          DebugUtils.log('解析消息数据失败', name: 'socket');
         }
       } catch (e) {
-        print('处理消息出错: $e');
+        DebugUtils.log('处理消息出错: $e', name: 'socket');
         _receiveBuffer.clear();
         break;
       }
@@ -356,14 +361,14 @@ class SocketClient {
 
   /// Socket错误回调
   void _onSocketError(error) {
-    print('Socket错误: $error');
+    DebugUtils.log('Socket错误: $error', name: 'socket');
     onError?.call('Socket错误: $error');
     _handleDisconnect();
   }
 
   /// Socket关闭回调
   void _onSocketClosed() {
-    print('Socket连接已关闭');
+    DebugUtils.log('Socket连接已关闭', name: 'socket');
     _handleDisconnect();
   }
 
@@ -387,13 +392,13 @@ class SocketClient {
       return;
     }
     if (_reconnectAttempts >= maxReconnectAttempts) {
-      print('已达到最大重连次数，停止重连');
+      DebugUtils.log('已达到最大重连次数，停止重连', name: 'socket');
       onError?.call('无法连接到服务器');
       return;
     }
 
     _reconnectAttempts++;
-    print('将在$reconnectInterval秒后进行第$_reconnectAttempts次重连...');
+    DebugUtils.log('将在$reconnectInterval秒后进行第$_reconnectAttempts次重连...', name: 'socket');
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: reconnectInterval), () {
@@ -401,7 +406,7 @@ class SocketClient {
       if (_state == SocketState.connected || _socket != null || !_autoReconnectEnabled) {
         return;
       }
-      print('开始第$_reconnectAttempts次重连...');
+      DebugUtils.log('开始第$_reconnectAttempts次重连...', name: 'socket');
       _doConnect();
     });
   }
@@ -442,14 +447,14 @@ class SocketClient {
   void _updateState(SocketState newState) {
     if (_state != newState) {
       _state = newState;
-      print('Socket状态变更: $newState');
+      DebugUtils.log('Socket状态变更: $newState', name: 'socket');
       onStateChanged?.call(newState);
     }
   }
 
   /// 断开连接
   void disconnect() {
-    print('主动断开Socket连接');
+    DebugUtils.log('主动断开Socket连接', name: 'socket');
     _isManualDisconnect = true;
     _autoReconnectEnabled = false;
     _reconnectTimer?.cancel();
@@ -458,7 +463,7 @@ class SocketClient {
     try {
       _socket?.close();
     } catch (e) {
-      print('关闭Socket出错: $e');
+      DebugUtils.log('关闭Socket出错: $e', name: 'socket');
     }
     
     _socket = null;

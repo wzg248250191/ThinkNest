@@ -16,7 +16,6 @@ import 'dart:async';
 import 'package:get/get.dart';
 import '../../index.dart';
 
-
 part 'socket_service_connection_mixin.dart';
 part 'socket_service_send_mixin.dart';
 part 'socket_service_handle_mixin.dart';

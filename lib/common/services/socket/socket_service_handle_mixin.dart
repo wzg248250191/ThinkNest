@@ -25,16 +25,19 @@ mixin SocketServiceHandleMixin on SocketServiceBase {
         _handleServerResponse(serverType, message.serverMessage);
         break;
       case MSGTYPE.HeartEcho:
-        print('收到${serverType.displayName}心跳响应');
+        DebugUtils.log('收到${serverType.displayName}心跳响应', name: 'socket');
         break;
       default:
-        print('收到${serverType.displayName}未处理的消息类型: ${message.mSGtype}');
+        DebugUtils.log('收到${serverType.displayName}未处理的消息类型: ${message.mSGtype}', name: 'socket');
     }
   }
 
   /// 处理状态消息
   void _handleStatusMessage(ServerType serverType, MSGStatus status) {
-    print('收到${serverType.displayName}状态消息: ${status.operationstatus}, 信息: ${status.info}');
+    DebugUtils.log(
+      '收到${serverType.displayName}状态消息: ${status.operationstatus}, 信息: ${status.info}',
+      name: 'socket',
+    );
 
     final op = status.operationstatus;
     if (!_shouldShowStatusSnackbar(serverType, op)) {
@@ -59,7 +62,7 @@ mixin SocketServiceHandleMixin on SocketServiceBase {
 
   /// 处理Unity响应
   void _handleUnityResponse(ServerType serverType, UnityMessage unityMessage) {
-    print('收到${serverType.displayName}的Unity响应: ${unityMessage.unityMSGtype}');
+    DebugUtils.log('收到${serverType.displayName}的Unity响应: ${unityMessage.unityMSGtype}', name: 'socket');
   }
 
   /// 处理服务器响应
@@ -71,7 +74,10 @@ mixin SocketServiceHandleMixin on SocketServiceBase {
             serverType == ServerType.desktop && _courseListSource == ServerType.wall && wallConnected;
 
         if (shouldIgnoreDesktop) {
-          print('忽略${serverType.displayName}课程清单（当前以墙面为准）: ${serverMessage.courseList.length}');
+          DebugUtils.log(
+            '忽略${serverType.displayName}课程清单（当前以墙面为准）: ${serverMessage.courseList.length}',
+            name: 'socket',
+          );
           break;
         }
 
@@ -82,7 +88,7 @@ mixin SocketServiceHandleMixin on SocketServiceBase {
             !wallConnected;
 
         if (!shouldApply) {
-          print('忽略${serverType.displayName}课程清单: ${serverMessage.courseList.length}');
+          DebugUtils.log('忽略${serverType.displayName}课程清单: ${serverMessage.courseList.length}', name: 'socket');
           break;
         }
 
@@ -90,10 +96,10 @@ mixin SocketServiceHandleMixin on SocketServiceBase {
         isCourseListLoading.value = false;
         _courseListSource = serverType;
         unawaited(Storage().setList(_courseListCacheKey, serverMessage.courseList));
-        print('收到${serverType.displayName}课程清单: ${courseList.length}');
+        DebugUtils.log('收到${serverType.displayName}课程清单: ${courseList.length}', name: 'socket');
         break;
       default:
-        print('收到${serverType.displayName}响应: ${serverMessage.serverBehaviour}');
+        DebugUtils.log('收到${serverType.displayName}响应: ${serverMessage.serverBehaviour}', name: 'socket');
         break;
     }
   }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:think_nest/common/utils/debug_utils.dart';
 
 class SettingsController extends GetxController {
   SettingsController();
@@ -87,7 +88,13 @@ class SettingsController extends GetxController {
       if (await cacheDir.exists()) {
         await cacheDir.delete(recursive: true);
       }
-    } catch (_) {}
+    } catch (e) {
+      // 清缓存失败可忽略：可能文件被占用/权限限制，避免影响设置页正常使用
+      assert(() {
+        DebugUtils.log('清除缓存失败: $e', name: 'settings');
+        return true;
+      }());
+    }
     await loadCacheCount();
   }
 

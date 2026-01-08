@@ -40,15 +40,19 @@ class ConfigService extends GetxService {
 
   // 切换 theme
   Future<void> setThemeMode(String themeKey) async {
+    final ctx = Get.context;
+    if (ctx == null) {
+      return;
+    }
     switch (themeKey) {
       case "light":
-        AdaptiveTheme.of(Get.context!).setLight();
+        AdaptiveTheme.of(ctx).setLight();
         break;
       case "dark":
-        AdaptiveTheme.of(Get.context!).setDark();
+        AdaptiveTheme.of(ctx).setDark();
         break;
       case "system":
-        AdaptiveTheme.of(Get.context!).setSystem();
+        AdaptiveTheme.of(ctx).setSystem();
         break;
       // 添加自定义主题切换逻辑
       // 注意：AdaptiveTheme 默认只支持 light/dark/system。
@@ -61,12 +65,12 @@ class ConfigService extends GetxService {
         // 但 AdaptiveTheme 3.x+ 主要支持 setLight/setDark/setSystem
         
         // 如果你的意图是把 "custom" 当作默认的亮色主题来用：
-        AdaptiveTheme.of(Get.context!).setTheme(
+        AdaptiveTheme.of(ctx).setTheme(
           light: AppTheme.custom, // 将 custom 设置为当前使用的 light 主题
           dark: AppTheme.dark,    // 保持 dark 主题不变
         );
         // 或者强制切换到 light 模式（此时 light 已经被替换为 custom）
-        AdaptiveTheme.of(Get.context!).setLight();
+        AdaptiveTheme.of(ctx).setLight();
         break;
     }
   }

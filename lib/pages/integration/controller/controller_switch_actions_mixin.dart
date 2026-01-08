@@ -316,10 +316,8 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       );
       commandOk = true;
     } catch (e) {
-      assert(() {
-        debugPrint(e.toString());
-        return true;
-      }());
+      // 指令下发失败时不向上抛出，避免打断 UI 交互流程；仅在 Debug 下记录异常便于排查
+      DebugUtils.log('一体化开关指令执行异常: $e', name: 'integration');
     } finally {
       _busy[type] = false;
     }

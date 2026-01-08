@@ -93,14 +93,11 @@ mixin _IntegrationSwitchStateMixin on GetxController {
   /// - 若数据不合法/非当天：清除本地数据并返回
   /// - 若数据合法：恢复到内存，并触发一次 UI 刷新
   void _restoreSwitchStatesIfValidToday() {
-    final String raw = _storage.getString(IntegrationController._switchStatesKey);
-    if (raw.isEmpty) {
-      return;
-    }
-
     try {
-      final dynamic decoded = jsonDecode(raw);
+      final dynamic decoded = _storage.getJson(IntegrationController._switchStatesKey);
+      if (decoded == null) return;
       if (decoded is! Map) {
+        // 防御：存储内容不是 Map 结构时按脏数据处理，避免后续解析逻辑异常
         _storage.remove(IntegrationController._switchStatesKey);
         return;
       }

@@ -3,25 +3,54 @@ import 'dart:async';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import '../../../common/index.dart';
-import '../../index.dart';
+import 'package:think_nest/common/index.dart';
+import 'package:think_nest/pages/index.dart';
 
 class MainController extends GetxController {
-  MainController();
-
-  // 分页管理
-  final PageController pageController = PageController();
-
   // 当前的 tab index
   int currentIndex = 0;
+
+  /// 启动遮罩是否可见（用于“完全热启动”预热）
+  bool _showStartupSplashOverlay = true;
+
+  /// 对外暴露：启动遮罩是否可见
+  bool get showStartupSplashOverlay => _showStartupSplashOverlay;
 
   // 退出请求时间
   DateTime? currentBackPressTime;
 
   /// 初始化主页面数据并触发首次刷新
-  _initData() {
+  void _initData() {
     update(["main"]);
+  }
+
+  /// 启动期“完全热启动”预热：
+  /// 1）开启课程页全量构建模式；
+  /// 2）等待课程清单并预缓存图片；
+  /// 3）在启动遮罩下完成课程页首帧构建；
+  /// 4）预热完成后揭开遮罩。
+  Future<void> _warmStart() async {
+    if (!_showStartupSplashOverlay) {
+      return;
+    }
+
+    // 先让主界面至少绘制一帧，确保遮罩已显示
+    await WidgetsBinding.instance.endOfFrame;
+
+    // 课程页预热：开启全量构建模式 + 预缓存资源
+    final CourseController courseController = Get.find<CourseController>();
+    courseController.enableFullBuildAllMode();
+    await courseController.preloadForSplash();
+
+    // 触发一次内容区刷新，让课程页在遮罩下完成构建与布局
+    update(['content']);
+
+    // 等待若干帧，确保课程页至少完成一次 build/layout/paint
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+
+    _showStartupSplashOverlay = false;
+    update(['startup_splash']);
   }
 
   // 导航栏切换
@@ -66,8 +95,20 @@ class MainController extends GetxController {
 
   /// 打开全屏课程详情覆盖层，并保证停留在课程 tab
   void openCourseController(String name) {
-    // 获取 Handler 实例（数据源）
-    final handler = Get.find<PcCourseMessageHandler>();
+    // 关键保护：避免在 Binding 尚未执行时 Get.find 直接抛错导致崩溃
+    final PcCourseMessageHandler? handler =
+        Get.isRegistered<PcCourseMessageHandler>() ? Get.find<PcCourseMessageHandler>() : null;
+    if (handler == null) {
+      ToastUtils.show('系统尚未初始化，请稍后重试');
+      return;
+    }
+    // 关键保护：复用同一个 Controller 实例，避免重复 Get.find，并防止未注册时直接抛错
+    final SingleCourseController? singleCourseController =
+        Get.isRegistered<SingleCourseController>() ? Get.find<SingleCourseController>() : null;
+    if (singleCourseController == null) {
+      ToastUtils.show('课程控制器尚未初始化，请稍后重试');
+      return;
+    }
     final activeId = handler.currentCourseId.value;
     final isRunning = handler.wallCourseEnabled.value || handler.deskCourseEnabled.value;
 
@@ -84,11 +125,10 @@ class MainController extends GetxController {
     }
 
     // 如果当前已经是打开状态，且是同一个课程，直接返回
-    if (showCourseDetail && Get.find<SingleCourseController>().courseId == name) {
+    if (showCourseDetail && singleCourseController.courseId == name) {
       return;
     }
-    
-    final singleCourseController = Get.find<SingleCourseController>();
+
     if (!isRunning && singleCourseController.controlSelectedIndex != 0) {
       singleCourseController.controlSelectedIndex = 0;
       singleCourseController.update(['type_switch']);
@@ -116,10 +156,12 @@ class MainController extends GetxController {
       try {
         // 直接调用常驻的 Controller
         singleCourseController.openCourse(name).catchError((e) {
-          print('Error opening course: $e');
+          // 仅用于排查“打开课程失败”场景，避免在 Release 下频繁 print 影响性能
+          DebugUtils.log('打开课程失败: $e', name: 'course');
         });
       } catch (e) {
-        print('Sync Error opening course: $e');
+        // 仅用于排查同步异常，避免在 Release 下频繁 print 影响性能
+        DebugUtils.log('打开课程同步异常: $e', name: 'course');
       }
     });
   }
@@ -146,13 +188,13 @@ class MainController extends GetxController {
   void onReady() {
     super.onReady();
     _initData();
+    // 启动后异步进行“完全热启动”预热，避免阻塞当前帧
+    unawaited(_warmStart());
   }
 
   @override
   /// 页面销毁时释放资源
   void onClose() {
     super.onClose();
-    // 释放页控制器
-    pageController.dispose();
   }
 }

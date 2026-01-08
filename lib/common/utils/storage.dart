@@ -24,6 +24,17 @@ class Storage {
     return await _prefs.setString(key, jsonEncode(value));
   }
 
+  /// 读取并解析本地存储的 Json 字符串，返回解码后的对象（可能为 Map/List/基础类型）。
+  ///
+  /// 说明：
+  /// - key 不存在或内容为空：返回 null
+  /// - Json 格式错误：抛出异常，交由上层决定是否清理脏数据
+  dynamic getJson(String key) {
+    final String raw = _prefs.getString(key) ?? '';
+    if (raw.isEmpty) return null;
+    return jsonDecode(raw);
+  }
+
   Future<bool> setString(String key, String value) async {
     return await _prefs.setString(key, value);
   }

@@ -2,6 +2,7 @@ import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:get/get.dart';
 import 'package:think_nest/global.dart';
 
@@ -13,7 +14,9 @@ import 'common/index.dart';
 /// - 先确保 Flutter 引擎/插件绑定完成，再进行全局初始化
 /// - 在 runApp 前完成横屏锁定与沉浸式/状态栏样式配置，避免首帧 UI 抖动
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  // 保留 Native Splash 直到自定义启动图资源就绪，避免中间出现“纯白过渡帧”
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   await Global.init();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,

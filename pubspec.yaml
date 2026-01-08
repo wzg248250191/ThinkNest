@@ -29,6 +29,8 @@ dependencies:
   scrollable_positioned_list: ^0.3.8
   protobuf: ^3.1.0
   material_symbols_icons: ^4.2892.0
+  # 启动屏（运行时保留/移除 Native Splash，避免中间白屏）
+  flutter_native_splash: ^2.4.7
 
 dev_dependencies:
   flutter_test:
@@ -39,8 +41,6 @@ dev_dependencies:
   protoc_plugin: ^21.1.2
   #桌面图标
   icons_launcher: ^3.0.3
-  # 启动屏
-  flutter_native_splash: ^2.4.7
 
 # app 图标
 icons_launcher:

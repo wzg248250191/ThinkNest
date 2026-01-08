@@ -33,7 +33,8 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
 
     if (type != IntegrationSwitchType.main) {
       final int remaining = _remainingMainCooldownSeconds();
-      if (remaining > 0) {
+      // 冷却期仅限制“开启子开关”，关闭不应被拦截，避免用户无法紧急关断设备。
+      if (remaining > 0 && desiredOn) {
         if (desiredOn != current.isOn) {
           _optimisticallySetIsOn(type, current.isOn);
           update(kIntegrationUpdateIds);
@@ -51,6 +52,11 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
         ToastUtils.show('请先开启总开关');
         return;
       }
+    }
+
+    if (type == IntegrationSwitchType.main && desiredOn && !current.isOn) {
+      // 仅当“用户手动打开总开关”时才启动 10 秒冷却倒计时（恢复/硬件同步不触发）。
+      _armMainCooldownForUserTurnOn();
     }
 
     if (type == IntegrationSwitchType.main && !desiredOn) {

@@ -55,11 +55,14 @@ mixin _IntegrationSwitchStateMixin on GetxController {
     final SwitchCircleState? prev = _switchStates[type];
     if (type == IntegrationSwitchType.main) {
       final bool prevOn = prev?.isOn ?? false;
-      if (!prevOn && next.isOn) {
-        _onMainSwitchTurnedOn();
-      }
-      if (prevOn && !next.isOn) {
-        _onMainSwitchTurnedOff();
+      // 恢复/同步状态属于“被动更新”，不应触发“总开关副作用钩子”（如冷却倒计时）。
+      if (!_restoringSwitchStates) {
+        if (!prevOn && next.isOn) {
+          _onMainSwitchTurnedOn();
+        }
+        if (prevOn && !next.isOn) {
+          _onMainSwitchTurnedOff();
+        }
       }
     }
     _switchStates[type] = next;

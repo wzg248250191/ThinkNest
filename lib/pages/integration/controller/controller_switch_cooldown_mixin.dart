@@ -13,21 +13,34 @@ mixin _IntegrationSwitchCooldownMixin on GetxController, _IntegrationSwitchState
   /// 记录总开关最近一次开启时间
   DateTime? _mainTurnedOnAt;
 
+  /// 标记下一次“总开关关->开”是否由用户手动触发，用于决定是否启动冷却倒计时。
+  bool _mainCooldownArmed = false;
+
   /// 防止重复弹窗
   bool _mainCooldownDialogShowing = false;
 
   /// 倒计时刷新计时器（每秒刷新一次）
   Timer? _mainCooldownTimer;
 
+  /// 标记总开关即将由用户手动打开，用于启动 10 秒冷却倒计时。
+  void _armMainCooldownForUserTurnOn() {
+    _mainCooldownArmed = true;
+  }
+
   @override
   /// 总开关从关->开：记录开启时间，开始冷却计时
   void _onMainSwitchTurnedOn() {
+    if (!_mainCooldownArmed) {
+      return;
+    }
+    _mainCooldownArmed = false;
     _mainTurnedOnAt = DateTime.now();
   }
 
   @override
   /// 总开关从开->关：清空开启时间，并关闭可能存在的冷却弹窗
   void _onMainSwitchTurnedOff() {
+    _mainCooldownArmed = false;
     _mainTurnedOnAt = null;
     _dismissMainCooldownDialog();
   }
@@ -152,4 +165,3 @@ mixin _IntegrationSwitchCooldownMixin on GetxController, _IntegrationSwitchState
     }
   }
 }
-

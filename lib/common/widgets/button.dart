@@ -375,8 +375,12 @@ class _ButtonWidgetState extends State<ButtonWidget> {
         color = colorScheme.error;
         break;
       case ButtonWidgetVariant.outline:
-      case ButtonWidgetVariant.ghost:
         color = widget.backgroundColor ?? Colors.transparent;
+        break;
+      case ButtonWidgetVariant.ghost:
+        // 关键交互：按住态底色复用高亮色（同时支持关闭涟漪时仍有明确按压反馈）
+        color = pressed ? _highlightColor() : (widget.backgroundColor ?? Colors.transparent);
+        break;
       case ButtonWidgetVariant.link:
       case ButtonWidgetVariant.icon:
         color = colorScheme.surface;

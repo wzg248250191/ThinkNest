@@ -20,7 +20,8 @@ mixin _IntegrationSwitchStateMixin on GetxController {
   /// 逻辑开关状态容器（不可变对象：更新请用 copyWith 后整体替换）
   final Map<IntegrationSwitchType, SwitchCircleState> _switchStates =
       <IntegrationSwitchType, SwitchCircleState>{
-    IntegrationSwitchType.main: const SwitchCircleState(enabled: true, isOn: true),
+    // 关键规则：总开关默认必须为关闭，避免“未操作也显示开启”的误导；是否开启由“当天有效”的恢复或硬件查询决定
+    IntegrationSwitchType.main: const SwitchCircleState(enabled: true, isOn: false),
     IntegrationSwitchType.wall: const SwitchCircleState(enabled: true, isOn: false),
     IntegrationSwitchType.desk: const SwitchCircleState(enabled: true, isOn: false),
     IntegrationSwitchType.light: const SwitchCircleState(enabled: true, isOn: false),

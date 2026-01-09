@@ -50,6 +50,18 @@ bool _isSameLocalDay(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
+class CourseStatusEvent {
+  const CourseStatusEvent({
+    required this.serverType,
+    required this.status,
+    required this.info,
+  });
+
+  final ServerType serverType;
+  final OperationStatus status;
+  final String? info;
+}
+
 class PcCourseMessageHandler extends GetxService {
   // 持久化 Key
   static const String _storageKey = StorageKeys.activeCourseSession;
@@ -66,9 +78,8 @@ class PcCourseMessageHandler extends GetxService {
   final RxInt wallVolume = 100.obs;
   final RxInt deskVolume = 100.obs;
 
-  final Rxn<OperationStatus> lastOperationStatus = Rxn<OperationStatus>();
-  final RxnString lastStatusInfo = RxnString();
-  final Rxn<ServerType> lastStatusServerType = Rxn<ServerType>();
+  /// 课程状态事件（包含来源服务器与附加信息），用于 UI 原子化消费，避免墙面/桌面消息串扰。
+  final Rxn<CourseStatusEvent> lastStatusEvent = Rxn<CourseStatusEvent>();
 
   StreamSubscription<(ServerType, MESSAGE)>? _sub;
 
@@ -218,9 +229,7 @@ class PcCourseMessageHandler extends GetxService {
   void detachCourse() {
     currentCourseId.value = null;
     resetLocalState(enabled: false); 
-    lastOperationStatus.value = null;
-    lastStatusInfo.value = null;
-    lastStatusServerType.value = null;
+    lastStatusEvent.value = null;
   }
 
   void resetLocalState({
@@ -249,11 +258,16 @@ class PcCourseMessageHandler extends GetxService {
       case MSGTYPE.ServerResponse:
         break;
       case MSGTYPE.Status:
-        // 强制触发更新，即使状态相同
-        lastOperationStatus.value = null; 
-        lastOperationStatus.value = message.mSGstatus.operationstatus;
-        lastStatusInfo.value = message.mSGstatus.info;
-        lastStatusServerType.value = serverType;
+        final status = message.mSGstatus.operationstatus;
+        final info = message.mSGstatus.info;
+
+        // 推荐新逻辑：以单个事件原子化携带 serverType/status/info，避免多字段读写时序导致的错乱。
+        lastStatusEvent.value = null;
+        lastStatusEvent.value = CourseStatusEvent(
+          serverType: serverType,
+          status: status,
+          info: info,
+        );
         break;
       case MSGTYPE.UnityResponse:
         if (message.hasUnityMessage()) {

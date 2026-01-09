@@ -268,17 +268,16 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     }
 
     final SocketService socketService = Get.find<SocketService>();
-    const Duration initialDelay = Duration(seconds: 10);
+    //const Duration initialDelay = Duration(seconds: 10);
     const int maxAttempts = 15;
     const Duration retryDelay = Duration(seconds: 6);
     const Duration udpTimeout = Duration(seconds: 6);
 
-    await Future.delayed(initialDelay);
+   // await Future.delayed(initialDelay);
     for (int i = 0; i < maxAttempts; i++) {
       if (!_mustSwitchState(type).isOn) {
         return;
-      }
-
+      }      
       final bool ok = await socketService.ensureConnected(
         serverType,
         udpTimeout: udpTimeout,

@@ -85,9 +85,18 @@ class SocketClient {
   /// - 连接成功后会启动心跳，避免长时间空闲被系统/路由器断开
   /// - [autoReconnect] 为 false 时：连接失败/断开不会触发自动重连（适合启动阶段尝试）
   Future<bool> connect(String host, int port, {bool autoReconnect = true}) async {
-    if (_state == SocketState.connected) {
-      DebugUtils.log('Socket已经连接', name: 'socket');
-      return true;
+    if (isConnected) {
+      final bool sameEndpoint = _host == host && _port == port;
+      if (sameEndpoint) {
+        DebugUtils.log('Socket已经连接', name: 'socket');
+        return true;
+      }
+      disconnect();
+    } else if (_state == SocketState.connecting) {
+      final bool sameEndpoint = _host == host && _port == port;
+      if (!sameEndpoint) {
+        disconnect();
+      }
     }
 
     _host = host;

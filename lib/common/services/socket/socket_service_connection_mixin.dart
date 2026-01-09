@@ -11,6 +11,70 @@
 part of 'socket_service.dart';
 
 mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin {
+  /// 获取本机当前可用的 IPv4 /24 网段前缀（例如 192.168.101）
+  Future<List<String>> _localIpv4CClassPrefixes() async {
+    try {
+      final prefixes = <String>{};
+      final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        type: InternetAddressType.IPv4,
+      );
+      for (final itf in interfaces) {
+        for (final addr in itf.addresses) {
+          final ip = addr.address;
+          if (!_isPrivateIpv4(ip)) {
+            continue;
+          }
+          final parts = ip.split('.');
+          if (parts.length != 4) {
+            continue;
+          }
+          prefixes.add('${parts[0]}.${parts[1]}.${parts[2]}');
+        }
+      }
+      return prefixes.toList(growable: false);
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  /// 判断某个 IPv4 是否属于私有网段（RFC1918）
+  bool _isPrivateIpv4(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4) {
+      return false;
+    }
+    final a = int.tryParse(parts[0]);
+    final b = int.tryParse(parts[1]);
+    if (a == null || b == null) {
+      return false;
+    }
+    if (a == 10) {
+      return true;
+    }
+    if (a == 192 && b == 168) {
+      return true;
+    }
+    if (a == 172 && b >= 16 && b <= 31) {
+      return true;
+    }
+    return false;
+  }
+
+  /// 判断目标服务器 IP 是否与本机处于同一 /24 局域网（避免跨网段误连）
+  Future<bool> _isServerInSameLan(String host) async {
+    if (!_isPrivateIpv4(host)) {
+      return false;
+    }
+    final hostParts = host.split('.');
+    if (hostParts.length != 4) {
+      return false;
+    }
+    final hostPrefix = '${hostParts[0]}.${hostParts[1]}.${hostParts[2]}';
+    final localPrefixes = await _localIpv4CClassPrefixes();
+    return localPrefixes.contains(hostPrefix);
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -55,6 +119,14 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   /// - [autoReconnect] 控制断线后是否自动重连（启动阶段可关闭，业务阶段建议开启）
   /// - 连接成功后会持久化 IP/端口，供下次启动直接直连
   Future<bool> connect(ServerType serverType, String host, int port, {bool autoReconnect = true}) async {
+    if (!await _isServerInSameLan(host)) {
+      // 关键逻辑：只允许连接“当前本机所在网段”内的服务器，避免跨网段误连旧场地设备。
+      DebugUtils.log(
+        '拒绝连接：目标服务器不在同一局域网内，host=$host, localPrefixes=${await _localIpv4CClassPrefixes()}',
+        name: 'socket',
+      );
+      return false;
+    }
     final success =
         await _clientManager.connect(serverType, host, port, autoReconnect: autoReconnect);
     if (success) {
@@ -79,16 +151,34 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   ///   1) 有历史 IP：循环直连多次（适配网络未就绪）
   ///   2) 无历史 IP：做一次短 UDP 扫描找到服务器并连接
   Future<Map<ServerType, bool>> recoverConnectionsAtStartup({
-    int attempts = 5,
+    int attempts = 3,
     Duration retryDelay = const Duration(seconds: 2),
     Duration udpTimeout = const Duration(seconds: 2),
   }) async {
     final wallEndpoint = _loadLastServerEndpoint(ServerType.wall);
     final desktopEndpoint = _loadLastServerEndpoint(ServerType.desktop);
 
+    final localPrefixes = await _localIpv4CClassPrefixes();
+    bool isSameLanFast(String ip) {
+      if (!_isPrivateIpv4(ip)) {
+        return false;
+      }
+      final parts = ip.split('.');
+      if (parts.length != 4) {
+        return false;
+      }
+      final prefix = '${parts[0]}.${parts[1]}.${parts[2]}';
+      return localPrefixes.contains(prefix);
+    }
+
+    final filteredWallEndpoint = wallEndpoint != null && isSameLanFast(wallEndpoint.ip) ? wallEndpoint : null;
+    final filteredDesktopEndpoint =
+        desktopEndpoint != null && isSameLanFast(desktopEndpoint.ip) ? desktopEndpoint : null;
+
     Future<List<DiscoveredServer>>? scanFuture;
-    if (wallEndpoint == null || desktopEndpoint == null) {
-      scanFuture = _scanForServersOnce(timeout: udpTimeout);
+    Future<List<DiscoveredServer>> ensureScanOnce() {
+      scanFuture ??= _scanForServersOnce(timeout: udpTimeout);
+      return scanFuture!;
     }
 
     Future<bool> recoverOne(ServerType serverType, ({String ip, int port})? endpoint) async {
@@ -97,7 +187,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
       }
 
       if (endpoint == null) {
-        final servers = await scanFuture!;
+        final servers = await ensureScanOnce();
         final discovered = _pickDiscoveredServer(servers, serverType);
         if (discovered == null) {
           return false;
@@ -125,12 +215,25 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
           await Future.delayed(retryDelay);
         }
       }
-      return false;
+
+      // 启动阶段存在“历史 IP 失效但服务器仍可被局域网发现”的情况：例如 DHCP 变化/双网卡切换。
+      // 这里在直连多次失败后回退到 UDP 扫描兜底，避免 App 重启后一直卡在旧 IP 上。
+      final servers = await ensureScanOnce();
+      final discovered = _pickDiscoveredServer(servers, serverType);
+      if (discovered == null) {
+        return false;
+      }
+      return await connect(
+        serverType,
+        discovered.ipAddress,
+        discovered.tcpPort,
+        autoReconnect: true,
+      );
     }
 
     final results = await Future.wait<bool>([
-      recoverOne(ServerType.wall, wallEndpoint),
-      recoverOne(ServerType.desktop, desktopEndpoint),
+      recoverOne(ServerType.wall, filteredWallEndpoint),
+      recoverOne(ServerType.desktop, filteredDesktopEndpoint),
     ]);
 
     return {ServerType.wall: results[0], ServerType.desktop: results[1]};
@@ -171,6 +274,10 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
 
     final endpoint = _loadLastServerEndpoint(serverType);
     if (endpoint != null) {
+      if (!await _isServerInSameLan(endpoint.ip)) {
+        // 关键逻辑：历史缓存 IP 不在当前局域网时，直接跳过直连，避免跨场地误连。
+        DebugUtils.log('跳过历史IP直连：不在同一局域网，serverType=$serverType, ip=${endpoint.ip}', name: 'socket');
+      } else {
       final ok = await connect(
         serverType,
         endpoint.ip,
@@ -179,6 +286,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
       );
       if (ok) {
         return true;
+      }
       }
     }
 

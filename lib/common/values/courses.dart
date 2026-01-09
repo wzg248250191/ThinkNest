@@ -90,6 +90,13 @@ const Map<String, Map<String, Object?>> coursesByName = <String, Map<String, Obj
     'type': '创想之光',
     'letterName': 'xdzrxbl',
   },
+  '新向大自然学本领': <String, Object?>{
+    'name': '新向大自然学本领',
+    'class': '中班',
+    'describe': '艺术、科学',
+    'type': '创想之光',
+    'letterName': 'xxdzrxbl',
+  },
   '喜气洋洋过新年': <String, Object?>{
     'name': '喜气洋洋过新年',
     'class': '小班',

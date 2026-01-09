@@ -115,8 +115,9 @@ class SingleCourseController extends GetxController {
     super.onInit();
 
     // 监听全局操作状态，在界面显示提示
-    ever<OperationStatus?>(_handler.lastOperationStatus, (status) {
-      if (status == null) return;
+    ever<CourseStatusEvent?>(_handler.lastStatusEvent, (event) {
+      if (event == null) return;
+      final status = event.status;
       
       // 只有在课程详情页显示时才弹窗
       final mainController = Get.find<MainController>();
@@ -133,13 +134,21 @@ class SingleCourseController extends GetxController {
           msg = 'iPad客户端未连接';
           break;
         case OperationStatus.NullCourse:
-          msg = '主机上没有对应的课程';
+          // 使用事件携带的来源类型，避免读取分散字段时出现墙面/桌面串扰。
+          final ServerType type = event.serverType;
+          if (type == ServerType.wall) {
+            msg = '墙面主机上没有对应的课程';
+          } else if (type == ServerType.desktop) {
+            msg = '桌面主机上没有对应的课程';
+          } else {
+            msg = '主机上没有对应的课程';
+          }
           break;
         case OperationStatus.CoursePlayisRunning:
           _cancelOpenCourseTimeout();
           ToastUtils.hide(force: true);
 
-          final ServerType? type = _handler.lastStatusServerType.value;
+          final ServerType type = event.serverType;
           if (type == ServerType.wall) {
             setWallEnabled(false, skipConfirm: true);
           } else if (type == ServerType.desktop) {
@@ -165,7 +174,7 @@ class SingleCourseController extends GetxController {
 
       if (msg != null) {
         _cancelOpenCourseTimeout();
-        final info = _handler.lastStatusInfo.value;
+        final info = event.info;
         final fullMsg = (info != null && info.isNotEmpty) ? '$msg: $info' : msg;
         
         // 使用全屏 Dialog 弹窗
@@ -197,6 +206,10 @@ class SingleCourseController extends GetxController {
       wallEnabled = enabled;
       _syncWholeEnabledFromParts();
       _tryCompleteOpenCourseTimeout();
+      if (!enabled && Get.isRegistered<WallController>()) {
+        // 关闭墙面课程后恢复默认按钮状态，避免常驻 Controller 残留上一次面板状态。
+        Get.find<WallController>().resetPanelState();
+      }
       update(['course_control_toggle', 'course_switches']);
     });
 
@@ -207,6 +220,10 @@ class SingleCourseController extends GetxController {
       deskEnabled = enabled;
       _syncWholeEnabledFromParts();
       _tryCompleteOpenCourseTimeout();
+      if (!enabled && Get.isRegistered<DeskController>()) {
+        // 关闭桌面课程后恢复“开始试玩”默认状态，避免常驻 Controller 残留上一次面板状态。
+        Get.find<DeskController>().resetPanelState();
+      }
       update(['course_control_toggle', 'course_switches']);
     });
 
@@ -251,6 +268,14 @@ class SingleCourseController extends GetxController {
        wallEnabled = false;
        deskEnabled = false;
        wholeEnabled = false;  
+       
+       // 新课程初始化时恢复默认面板状态，避免常驻 Controller 复用导致的残留显示。
+       if (Get.isRegistered<WallController>()) {
+         Get.find<WallController>().resetPanelState();
+       }
+       if (Get.isRegistered<DeskController>()) {
+         Get.find<DeskController>().resetPanelState();
+       }
     
        // 重置 Handler 状态
        _handler.resetLocalState(enabled: false);
@@ -275,6 +300,14 @@ class SingleCourseController extends GetxController {
     wallEnabled = false;
     deskEnabled = false;
     wholeEnabled = false;
+    
+    // 关闭课程详情面板时恢复默认操作状态，避免下次进入时残留上一次状态。
+    if (Get.isRegistered<WallController>()) {
+      Get.find<WallController>().resetPanelState();
+    }
+    if (Get.isRegistered<DeskController>()) {
+      Get.find<DeskController>().resetPanelState();
+    }
 
     _cancelOpenCourseTimeout();
     ToastUtils.hide();

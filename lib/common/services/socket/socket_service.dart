@@ -13,6 +13,7 @@
 /// - 消息处理：socket_service_handle_mixin.dart
 library socket_service;
 import 'dart:async';
+import 'dart:io';
 import 'package:get/get.dart';
 import '../../index.dart';
 

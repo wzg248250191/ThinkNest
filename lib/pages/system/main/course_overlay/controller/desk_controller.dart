@@ -12,6 +12,12 @@ class DeskController extends GetxController {
 
   bool isTesting = false;
 
+  /// 重置桌面操作面板状态为默认值
+  void resetPanelState() {
+    isTesting = false;
+    update(['desk_part']);
+  }
+
   Future<void> onPlayTap(bool v) async {
     if (_courseController.courseId == null) {
       ToastUtils.show('请先选择课程');

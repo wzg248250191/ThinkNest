@@ -11,6 +11,9 @@ class UdpDiscoveryService {
   
   /// 发现的服务器列表
   final List<DiscoveredServer> _discoveredServers = [];
+
+  /// 本机当前可用的 IPv4 /24 网段前缀缓存（例如 192.168.101）
+  List<String> _localIpv4Prefixes = const <String>[];
   
   /// 扫描完成通知（用于提前结束扫描）
   Completer<void>? _discoveryDoneCompleter;
@@ -63,6 +66,7 @@ class UdpDiscoveryService {
       _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       _socket!.broadcastEnabled = true;
       _discoveryDoneCompleter = Completer<void>();
+      _localIpv4Prefixes = await _computeLocalIpv4CClassPrefixes();
       
       DebugUtils.log('UDP发现服务已启动，本地端口: ${_socket!.port}', name: 'socket');
       
@@ -145,21 +149,87 @@ class UdpDiscoveryService {
 
   /// 发送到常见网段
   void _sendToCommonSubnets(List<int> data) {
-    // 常见的局域网网段
-    final subnets = ['192.168.1', '192.168.0', '192.168.2', '10.0.0', '172.16.0'];
-    
-    for (final subnet in subnets) {
+    // 关键逻辑：只向“本机当前所在局域网网段”发送，避免跨场地扫描到其它网段服务器。
+    final prefixes = _localIpv4CClassPrefixes();
+    for (final prefix in prefixes) {
       try {
-        // 发送到广播地址
         _socket?.send(
           data,
-          InternetAddress('$subnet.255'),
+          InternetAddress('$prefix.255'),
           udpEchoPort,
         );
-      } catch (e) {
+      } catch (_) {
         // 忽略发送失败
       }
     }
+  }
+
+  /// 获取本机当前可用的 IPv4 /24 网段前缀（例如 192.168.101）
+  List<String> _localIpv4CClassPrefixes() {
+    return _localIpv4Prefixes;
+  }
+
+  /// 计算本机当前可用的 IPv4 /24 网段前缀（例如 192.168.101）
+  Future<List<String>> _computeLocalIpv4CClassPrefixes() async {
+    try {
+      final prefixes = <String>{};
+      final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        type: InternetAddressType.IPv4,
+      );
+      for (final itf in interfaces) {
+        for (final addr in itf.addresses) {
+          final ip = addr.address;
+          if (!_isPrivateIpv4(ip)) {
+            continue;
+          }
+          final parts = ip.split('.');
+          if (parts.length != 4) {
+            continue;
+          }
+          prefixes.add('${parts[0]}.${parts[1]}.${parts[2]}');
+        }
+      }
+      return prefixes.toList(growable: false);
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  /// 判断某个 IPv4 是否属于私有网段（RFC1918）
+  bool _isPrivateIpv4(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4) {
+      return false;
+    }
+    final a = int.tryParse(parts[0]);
+    final b = int.tryParse(parts[1]);
+    if (a == null || b == null) {
+      return false;
+    }
+    if (a == 10) {
+      return true;
+    }
+    if (a == 192 && b == 168) {
+      return true;
+    }
+    if (a == 172 && b >= 16 && b <= 31) {
+      return true;
+    }
+    return false;
+  }
+
+  /// 判断某个服务器 IP 是否与本机处于同一 /24 局域网
+  bool _isServerInSameLan(String serverIp) {
+    if (!_isPrivateIpv4(serverIp)) {
+      return false;
+    }
+    final parts = serverIp.split('.');
+    if (parts.length != 4) {
+      return false;
+    }
+    final prefix = '${parts[0]}.${parts[1]}.${parts[2]}';
+    return _localIpv4CClassPrefixes().contains(prefix);
   }
 
   /// 处理接收到的数据
@@ -179,6 +249,10 @@ class UdpDiscoveryService {
       
       if (message.mSGtype == MSGTYPE.HeartEcho) {
         final serverIp = datagram.address.address;
+        if (!_isServerInSameLan(serverIp)) {
+          // 关键逻辑：过滤非本机所在局域网的响应，避免跨网段发现到其它场地服务器。
+          return;
+        }
         
         // 检查是否已发现
         if (_discoveredServers.any((s) => s.ipAddress == serverIp)) {

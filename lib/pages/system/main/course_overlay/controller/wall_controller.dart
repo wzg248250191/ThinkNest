@@ -28,6 +28,17 @@ class WallController extends GetxController {
   final RxBool midInteract = false.obs;
   final RxBool rightInteract = false.obs;
 
+  /// 重置墙面操作面板状态为默认值
+  void resetPanelState() {
+    leftPower.value = false;
+    midPower.value = false;
+    rightPower.value = false;
+
+    leftInteract.value = false;
+    midInteract.value = false;
+    rightInteract.value = false;
+  }
+
   Future<void> onWallPowerChanged(WallArea area, bool enabled) async {
     if (_courseController.courseId == null) {
       ToastUtils.show('请先选择课程');
@@ -164,11 +175,11 @@ class WallController extends GetxController {
     }
     final String op = switch (area) {
       WallArea.left =>
-        enabled ? CourseNetOperationTable.wallLClose.code : CourseNetOperationTable.wallLOpen.code,
+        enabled ? CourseNetOperationTable.wallLPause.code : CourseNetOperationTable.wallLPlay.code,
       WallArea.middle =>
-        enabled ? CourseNetOperationTable.wallMClose.code : CourseNetOperationTable.wallMOpen.code,
+        enabled ? CourseNetOperationTable.wallMPause.code : CourseNetOperationTable.wallMPlay.code,
       WallArea.right =>
-        enabled ? CourseNetOperationTable.wallRClose.code : CourseNetOperationTable.wallROpen.code,
+        enabled ? CourseNetOperationTable.wallRPause.code : CourseNetOperationTable.wallRPlay.code,
     };
     _socketService.sendUnityOperation(ServerType.wall, op);
     return Future.value(true);
@@ -180,11 +191,11 @@ class WallController extends GetxController {
     }
     final String op = switch (area) {
       WallArea.left =>
-        enabled ? CourseNetOperationTable.wallLPause.code : CourseNetOperationTable.wallLPlay.code,
+        enabled ? CourseNetOperationTable.wallLClose.code : CourseNetOperationTable.wallLOpen.code,
       WallArea.middle =>
-        enabled ? CourseNetOperationTable.wallMPause.code : CourseNetOperationTable.wallMPlay.code,
+        enabled ? CourseNetOperationTable.wallMClose.code : CourseNetOperationTable.wallMOpen.code,
       WallArea.right =>
-        enabled ? CourseNetOperationTable.wallRPause.code : CourseNetOperationTable.wallRPlay.code,
+        enabled ? CourseNetOperationTable.wallRClose.code : CourseNetOperationTable.wallROpen.code,
     };
     _socketService.sendUnityOperation(ServerType.wall, op);
     return Future.value(true);

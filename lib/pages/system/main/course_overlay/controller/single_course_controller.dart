@@ -378,9 +378,45 @@ class SingleCourseController extends GetxController {
     }
     if (enabled) {
       _cancelOpenCourseTimeout();
+      final bool wallAlreadyEnabled = wallEnabled == true;
+      final bool deskAlreadyEnabled = deskEnabled == true;
+
+      // 关键逻辑：整体开关“开启”时，若某端课程已开启，则不再向该端重复发送开启指令，避免状态提示错乱。
+      if (wallAlreadyEnabled && deskAlreadyEnabled) {
+        update(['course_control_toggle']);
+        return;
+      }
+
+      if (wallAlreadyEnabled && !deskAlreadyEnabled) {
+        final bool deskConnected = _socketService.isConnected(ServerType.desktop);
+        if (!deskConnected) {
+          ToastUtils.show('桌面服务器未连接', type: ToastType.error);
+          update(['course_control_toggle']);
+          return;
+        }
+        _socketService.controlApplication(ServerType.desktop, id, true);
+        ToastUtils.showLoading('课程正在打开中，请耐心等待');
+        _startOpenCourseTimeout(expectWallEnable: false, expectDeskEnable: true);
+        update(['course_control_toggle']);
+        return;
+      }
+
+      if (!wallAlreadyEnabled && deskAlreadyEnabled) {
+        final bool wallConnected = _socketService.isConnected(ServerType.wall);
+        if (!wallConnected) {
+          ToastUtils.show('墙面服务器未连接', type: ToastType.error);
+          update(['course_control_toggle']);
+          return;
+        }
+        _socketService.controlApplication(ServerType.wall, id, true);
+        ToastUtils.showLoading('课程正在打开中，请耐心等待');
+        _startOpenCourseTimeout(expectWallEnable: true, expectDeskEnable: false);
+        update(['course_control_toggle']);
+        return;
+      }
+
       final bool wallConnected = _socketService.isConnected(ServerType.wall);
       final bool deskConnected = _socketService.isConnected(ServerType.desktop);
-
       if (!wallConnected || !deskConnected) {
         if (!wallConnected && !deskConnected) {
           ToastUtils.show('墙面和桌面服务器均未连接', type: ToastType.error);

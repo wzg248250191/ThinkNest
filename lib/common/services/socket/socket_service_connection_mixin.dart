@@ -61,18 +61,23 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     return false;
   }
 
-  /// 判断目标服务器 IP 是否与本机处于同一 /24 局域网（避免跨网段误连）
+  /// 判断目标服务器 IP 是否与本机处于同一局域网（按 IPv4 前三段 /24 判断）
   Future<bool> _isServerInSameLan(String host) async {
     if (!_isPrivateIpv4(host)) {
       return false;
     }
-    final hostParts = host.split('.');
-    if (hostParts.length != 4) {
+    final parts = host.split('.');
+    if (parts.length != 4) {
       return false;
     }
-    final hostPrefix = '${hostParts[0]}.${hostParts[1]}.${hostParts[2]}';
+    final String prefix = '${parts[0]}.${parts[1]}.${parts[2]}';
     final localPrefixes = await _localIpv4CClassPrefixes();
-    return localPrefixes.contains(hostPrefix);
+    if (localPrefixes.isEmpty) {
+      // 关键逻辑：若无法获取本机网段（偶发权限/系统状态异常），不应直接拒绝连接；此时放行交由连接结果判定。
+      return true;
+    }
+    // 关键逻辑：统一以“本机当前连接网络的前三段前缀”判断同一局域网，避免跨场地误连旧缓存 IP。
+    return localPrefixes.contains(prefix);
   }
 
   @override
@@ -147,93 +152,48 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   ///
   /// 说明：
   /// - 目标：解决“设备已开→App 后开”导致的未连接问题
-  /// - 策略：
-  ///   1) 有历史 IP：循环直连多次（适配网络未就绪）
-  ///   2) 无历史 IP：做一次短 UDP 扫描找到服务器并连接
+  /// - 策略：每次尝试都走 ensureConnected（历史 IP 直连 → UDP 扫描兜底），并利用其并发去重
+  /// - 额外约束：本次启动恢复流程中最多只做一次 UDP 扫描，其它尝试复用扫描结果
   Future<Map<ServerType, bool>> recoverConnectionsAtStartup({
     int attempts = 3,
     Duration retryDelay = const Duration(seconds: 2),
     Duration udpTimeout = const Duration(seconds: 2),
   }) async {
-    final wallEndpoint = _loadLastServerEndpoint(ServerType.wall);
-    final desktopEndpoint = _loadLastServerEndpoint(ServerType.desktop);
-
-    final localPrefixes = await _localIpv4CClassPrefixes();
-    bool isSameLanFast(String ip) {
-      if (!_isPrivateIpv4(ip)) {
-        return false;
-      }
-      final parts = ip.split('.');
-      if (parts.length != 4) {
-        return false;
-      }
-      final prefix = '${parts[0]}.${parts[1]}.${parts[2]}';
-      return localPrefixes.contains(prefix);
+    Future<List<DiscoveredServer>>? startupScanFuture;
+    // 启动恢复专用：最多只触发一次 UDP 扫描，避免每轮尝试都广播造成额外开销。
+    Future<List<DiscoveredServer>> startupScanOnce() {
+      startupScanFuture ??= _scanForServersOnce(timeout: udpTimeout);
+      return startupScanFuture!;
     }
 
-    final filteredWallEndpoint = wallEndpoint != null && isSameLanFast(wallEndpoint.ip) ? wallEndpoint : null;
-    final filteredDesktopEndpoint =
-        desktopEndpoint != null && isSameLanFast(desktopEndpoint.ip) ? desktopEndpoint : null;
-
-    Future<List<DiscoveredServer>>? scanFuture;
-    Future<List<DiscoveredServer>> ensureScanOnce() {
-      scanFuture ??= _scanForServersOnce(timeout: udpTimeout);
-      return scanFuture!;
-    }
-
-    Future<bool> recoverOne(ServerType serverType, ({String ip, int port})? endpoint) async {
+    // 启动恢复单条链路连接：通过 ensureConnected 复用“历史 IP + UDP 兜底”，并避免与其它触发点并发冲突。
+    Future<bool> recoverOne(ServerType serverType) async {
       if (_clientManager.getClient(serverType).isConnected) {
         return true;
       }
 
-      if (endpoint == null) {
-        final servers = await ensureScanOnce();
-        final discovered = _pickDiscoveredServer(servers, serverType);
-        if (discovered == null) {
-          return false;
-        }
-        return await connect(
-          serverType,
-          discovered.ipAddress,
-          discovered.tcpPort,
-          autoReconnect: true,
-        );
-      }
-
       for (var i = 0; i < attempts; i++) {
-        final ok = await connect(
+        final ok = await ensureConnected(
           serverType,
-          endpoint.ip,
-          endpoint.port,
-          autoReconnect: false,
+          udpTimeout: udpTimeout,
+          scanOnceOverride: startupScanOnce,
         );
-        if (ok) {
-          _clientManager.setAutoReconnectEnabled(serverType, true);
+        if (ok && _clientManager.getClient(serverType).isConnected) {
           return true;
         }
+        // 关键逻辑：ensureConnected 内部连接会打开底层自动重连；启动阶段只做有限次恢复尝试，
+        // 失败后立即关闭自动重连，避免 App 在后台长期打印“第 N 次重连”并造成耗电/耗网。
+        _clientManager.setAutoReconnectEnabled(serverType, false);
         if (i < attempts - 1) {
           await Future.delayed(retryDelay);
         }
       }
-
-      // 启动阶段存在“历史 IP 失效但服务器仍可被局域网发现”的情况：例如 DHCP 变化/双网卡切换。
-      // 这里在直连多次失败后回退到 UDP 扫描兜底，避免 App 重启后一直卡在旧 IP 上。
-      final servers = await ensureScanOnce();
-      final discovered = _pickDiscoveredServer(servers, serverType);
-      if (discovered == null) {
-        return false;
-      }
-      return await connect(
-        serverType,
-        discovered.ipAddress,
-        discovered.tcpPort,
-        autoReconnect: true,
-      );
+      return _clientManager.getClient(serverType).isConnected;
     }
 
     final results = await Future.wait<bool>([
-      recoverOne(ServerType.wall, filteredWallEndpoint),
-      recoverOne(ServerType.desktop, filteredDesktopEndpoint),
+      recoverOne(ServerType.wall),
+      recoverOne(ServerType.desktop),
     ]);
 
     return {ServerType.wall: results[0], ServerType.desktop: results[1]};
@@ -247,16 +207,87 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   Future<bool> ensureConnected(
     ServerType serverType, {
     Duration udpTimeout = const Duration(seconds: 3),
+    Future<List<DiscoveredServer>> Function()? scanOnceOverride,
   }) {
     final inFlight = _ensureConnectInFlight[serverType];
     if (inFlight != null) {
       return inFlight;
     }
 
-    final future = _ensureConnectedInternal(serverType, udpTimeout: udpTimeout)
+    final future = _ensureConnectedInternal(
+      serverType,
+      udpTimeout: udpTimeout,
+      scanOnceOverride: scanOnceOverride,
+    )
         .whenComplete(() => _ensureConnectInFlight.remove(serverType));
     _ensureConnectInFlight[serverType] = future;
     return future;
+  }
+
+  /// 在给定等待窗口内反复尝试，直到指定服务器连接就绪
+  ///
+  /// 说明：
+  /// - 适配“PC 开机→服务自启较慢”的场景，避免业务层只尝试一次就失败
+  /// - 内部会循环调用 ensureConnected（历史 IP 直连 → UDP 扫描兜底），并做指数退避等待
+  /// - [maxWait] 传 null 时表示不设上限，直到连接成功或 [shouldContinue] 返回 false
+  Future<bool> waitForConnected(
+    ServerType serverType, {
+    Duration? maxWait = const Duration(seconds: 45),
+    Duration initialDelay = const Duration(seconds: 2),
+    Duration maxDelay = const Duration(seconds: 15),
+    Duration minUdpTimeout = const Duration(seconds: 3),
+    Duration maxUdpTimeout = const Duration(seconds: 20),
+    bool Function()? shouldContinue,
+  }) async {
+    if (_clientManager.getClient(serverType).isConnected) {
+      return true;
+    }
+
+    final DateTime? deadline = maxWait == null ? null : DateTime.now().add(maxWait);
+    Duration delay = initialDelay;
+    int attempt = 0;
+
+    bool continueOk() => shouldContinue?.call() ?? true;
+
+    while (continueOk() && (deadline == null || DateTime.now().isBefore(deadline))) {
+      if (_clientManager.getClient(serverType).isConnected) {
+        return true;
+      }
+
+      attempt++;
+      final int udpSeconds = (minUdpTimeout.inSeconds + (attempt ~/ 2) * 2)
+          .clamp(minUdpTimeout.inSeconds, maxUdpTimeout.inSeconds);
+      final bool ok = await ensureConnected(
+        serverType,
+        udpTimeout: Duration(seconds: udpSeconds),
+      );
+      if (ok && _clientManager.getClient(serverType).isConnected) {
+        return true;
+      }
+      // 关键逻辑：waitForConnected 由业务层控制重试节奏；单次 ensureConnected 失败后立刻关闭底层自动重连，
+      // 避免当用户取消/离开页面后仍在后台无限重连并持续打印“第 N 次重连”。
+      _clientManager.setAutoReconnectEnabled(serverType, false);
+
+      final Duration remaining =
+          deadline == null ? const Duration(days: 3650) : deadline.difference(DateTime.now());
+      if (deadline != null && remaining <= Duration.zero) {
+        break;
+      }
+
+      final Duration sleep = delay > remaining ? remaining : delay;
+      await Future.delayed(sleep);
+
+      final int nextMs = (delay.inMilliseconds * 2)
+          .clamp(initialDelay.inMilliseconds, maxDelay.inMilliseconds);
+      delay = Duration(milliseconds: nextMs);
+    }
+
+    final connected = _clientManager.getClient(serverType).isConnected;
+    if (!connected) {
+      // 关键逻辑：等待窗口结束或被取消时，确保不遗留底层自动重连，避免后台持续消耗网络/电量。
+      _clientManager.setAutoReconnectEnabled(serverType, false);
+    }
+    return connected;
   }
 
   /// ensureConnected 的内部实现
@@ -267,6 +298,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   Future<bool> _ensureConnectedInternal(
     ServerType serverType, {
     required Duration udpTimeout,
+    Future<List<DiscoveredServer>> Function()? scanOnceOverride,
   }) async {
     if (_clientManager.getClient(serverType).isConnected) {
       return true;
@@ -291,7 +323,8 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     }
 
     // 兜底：UDP 扫描获取服务器 IP
-    final servers = await _scanForServersOnce(timeout: udpTimeout);
+    // 关键逻辑：允许上层复用扫描结果（例如启动恢复阶段限制“最多扫一次”），避免重复广播。
+    final servers = await (scanOnceOverride?.call() ?? _scanForServersOnce(timeout: udpTimeout));
     final discovered = _pickDiscoveredServer(servers, serverType);
     if (discovered == null) {
       return false;
@@ -450,6 +483,19 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     endpoint.connectionState.value = state;
     if (state == SocketState.disconnected) {
       endpoint.connectedServerIp.value = null;
+    }
+    if (state == SocketState.connected) {
+      // 关键逻辑：存在“底层自动重连成功，但未走 SocketService.connect()”的场景；
+      // 此时需要在连接就绪时补发课程列表请求，否则 UI 可能一直没有本地课程清单。
+      if (endpoint.connectedServerIp.value == null) {
+        final cached = _loadLastServerEndpoint(serverType);
+        if (cached != null) {
+          endpoint.connectedServerIp.value = cached.ip;
+        }
+      }
+      if (courseList.isEmpty) {
+        requestCourseList(serverType);
+      }
     }
     //当所有服务器连接都断开时，重置课程列表相关的 UI 状态 。
     /*if (!_clientManager.isAnyConnected) {

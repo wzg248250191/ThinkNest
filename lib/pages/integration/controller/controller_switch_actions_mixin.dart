@@ -141,17 +141,20 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
         ]);
       }
 
-      final Duration delay = const Duration(seconds: 10);
+      // 关键业务约束：墙面/桌面关机时需先关主机，再等待一段时间后关投影，避免投影异常断电。
+      // 按需求将“关机间隔”从 10 秒调整为 5 秒；开机流程保持原 10 秒间隔。
+      final Duration openDelay = const Duration(seconds: 10);
+      final Duration closeDelay = const Duration(seconds: 5);
       if (commandType == IntegrationDeviceCommandType.open) {
         await runIndexes(nonHostIndexes);
         if (nonHostIndexes.isNotEmpty && hostIndexes.isNotEmpty) {
-          await Future.delayed(delay);
+          await Future.delayed(openDelay);
         }
         await runIndexes(hostIndexes);
       } else {
         await runIndexes(hostIndexes);
         if (nonHostIndexes.isNotEmpty && hostIndexes.isNotEmpty) {
-          await Future.delayed(delay);
+          await Future.delayed(closeDelay);
         }
         await runIndexes(nonHostIndexes);
       }
@@ -252,11 +255,28 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     }
   }
 
+  /// 停止墙面/桌面对应 Socket 的自动重连，并断开连接
+  ///
+  /// 说明：
+  /// - 用于“开关关闭”或“等待窗口超时”等场景，确保不会继续后台打印“第 N 次重连”并消耗网络/电量
+  void _stopSocketReconnectForSwitch(IntegrationSwitchType type) {
+    final ServerType? serverType = _serverTypeForSwitch(type);
+    if (serverType == null) {
+      return;
+    }
+    if (!Get.isRegistered<SocketService>()) {
+      return;
+    }
+    final SocketService socketService = Get.find<SocketService>();
+    socketService.clientManager.setAutoReconnectEnabled(serverType, false);
+    socketService.disconnect(serverType);
+  }
+
   /// 开启墙面/桌面后，等待 PC 服务端自启完成并尝试连接对应服务器
   ///
   /// 说明：
   /// - 使用 SocketService.ensureConnected：先判断已连接 → 再尝试历史 IP 直连 → 失败再 UDP 扫描兜底
-  /// - 等待窗口需要偏长（主机开机与 PC 服务端自启动需要时间）
+  /// - 等待窗口仅在开关打开后的 5 分钟内有效，超时后不再后台尝试连接（避免长期占用网络/电量）
   /// - 若等待/重试期间用户把开关关闭，会停止继续尝试
   Future<void> _ensureServerConnectedForSwitch(IntegrationSwitchType type) async {
     final ServerType? serverType = _serverTypeForSwitch(type);
@@ -268,16 +288,27 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     }
 
     final SocketService socketService = Get.find<SocketService>();
-    //const Duration initialDelay = Duration(seconds: 10);
-    const int maxAttempts = 15;
-    const Duration retryDelay = Duration(seconds: 6);
-    const Duration udpTimeout = Duration(seconds: 6);
+    // 关键逻辑：由“开关等待循环”控制重试节奏，避免底层 SocketClient 单独进入无限自动重连。
+    socketService.clientManager.setAutoReconnectEnabled(serverType, false);
+    // 关键逻辑：开关打开后 5 分钟内使用“固定短间隔 + 固定 UDP 超时”尝试连接；
+    // 超过窗口则停止尝试，避免用户离开场地/设备未开时长期后台重试造成网络/电量消耗。
+    final DateTime deadline = DateTime.now().add(const Duration(minutes: 5));
+    const Duration delay = Duration(seconds: 2);
+    const Duration udpTimeout = Duration(seconds: 3);
 
-   // await Future.delayed(initialDelay);
-    for (int i = 0; i < maxAttempts; i++) {
+    while (true) {
       if (!_mustSwitchState(type).isOn) {
+        _stopSocketReconnectForSwitch(type);
         return;
-      }      
+      }
+      if (DateTime.now().isAfter(deadline)) {
+        _stopSocketReconnectForSwitch(type);
+        return;
+      }
+      if (socketService.isConnected(serverType)) {
+        return;
+      }
+
       final bool ok = await socketService.ensureConnected(
         serverType,
         udpTimeout: udpTimeout,
@@ -286,9 +317,9 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
         return;
       }
 
-      if (i < maxAttempts - 1) {
-        await Future.delayed(retryDelay);
-      }
+      // 关键逻辑：ensureConnected 内部可能打开了底层自动重连，这里立即关闭，避免后台继续重连。
+      socketService.clientManager.setAutoReconnectEnabled(serverType, false);
+      await Future.delayed(delay);
     }
   }
 
@@ -312,14 +343,16 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       return;
     }
 
+    if (!desiredOn) {
+      _stopSocketReconnectForSwitch(type);
+    }
+
     _busy[type] = true;
-    bool commandOk = false;
     try {
       await executeSwitchCommand(
         type,
         commandType: desiredOn ? IntegrationDeviceCommandType.open : IntegrationDeviceCommandType.close,
       );
-      commandOk = true;
     } catch (e) {
       // 指令下发失败时不向上抛出，避免打断 UI 交互流程；仅在 Debug 下记录异常便于排查
       DebugUtils.log('一体化开关指令执行异常: $e', name: 'integration');
@@ -327,7 +360,9 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       _busy[type] = false;
     }
 
-    if (commandOk && desiredOn) {
+    if (desiredOn) {
+      // 关键逻辑：不依赖“开机卡/硬件指令是否成功”，只要用户希望开启且服务器未连接，就进入 5 分钟连接等待。
+      // 目的：覆盖“首次网络未就绪/硬件指令偶发失败，但 PC 服务端稍后自启完成”的场景，提升首次连接成功率。
       unawaited(_ensureServerConnectedForSwitch(type));
     }
 

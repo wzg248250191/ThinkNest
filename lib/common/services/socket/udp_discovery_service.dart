@@ -219,17 +219,22 @@ class UdpDiscoveryService {
     return false;
   }
 
-  /// 判断某个服务器 IP 是否与本机处于同一 /24 局域网
+  /// 判断某个服务器 IP 是否与本机处于同一局域网（按 IPv4 前三段 /24 判断）
   bool _isServerInSameLan(String serverIp) {
     if (!_isPrivateIpv4(serverIp)) {
       return false;
+    }
+    if (_localIpv4Prefixes.isEmpty) {
+      // 关键逻辑：若本机网段获取失败，不应过滤响应；否则会导致 UDP 发现永远为空。
+      return true;
     }
     final parts = serverIp.split('.');
     if (parts.length != 4) {
       return false;
     }
+    // 关键逻辑：以“本机当前连接网络的前三段前缀”判断同一局域网，避免跨场地误发现。
     final prefix = '${parts[0]}.${parts[1]}.${parts[2]}';
-    return _localIpv4CClassPrefixes().contains(prefix);
+    return _localIpv4Prefixes.contains(prefix);
   }
 
   /// 处理接收到的数据

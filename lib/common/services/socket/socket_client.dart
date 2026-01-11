@@ -57,8 +57,8 @@ class SocketClient {
   /// 重连尝试次数
   int _reconnectAttempts = 0;
   
-  /// 最大重连次数
-  final int maxReconnectAttempts = 5;
+  /// 最大重连次数（null 表示不设上限，适配“PC 自启动较慢”场景）
+  final int? maxReconnectAttempts = null;
   
   /// 重连间隔（秒）
   final int reconnectInterval = 3;
@@ -71,6 +71,9 @@ class SocketClient {
   
   /// 是否允许自动重连（用于区分“启动阶段轻量恢复”和“业务强关联下的持续重连”）
   bool _autoReconnectEnabled = true;
+
+  /// 防止异步调度重连时出现“旧任务覆盖新任务”的竞态
+  int _reconnectScheduleToken = 0;
 
   /// 获取当前连接状态
   SocketState get state => _state;
@@ -400,17 +403,116 @@ class SocketClient {
     if (!_autoReconnectEnabled) {
       return;
     }
-    if (_reconnectAttempts >= maxReconnectAttempts) {
+
+    // 关键逻辑：重连调度涉及获取本机网段（异步），这里通过 token 避免并发调度导致定时器状态错乱。
+    final int token = ++_reconnectScheduleToken;
+    unawaited(_scheduleReconnectInternal(token));
+  }
+
+  /// 判断某个 IPv4 是否属于私有网段（RFC1918）
+  bool _isPrivateIpv4(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4) {
+      return false;
+    }
+    final a = int.tryParse(parts[0]);
+    final b = int.tryParse(parts[1]);
+    if (a == null || b == null) {
+      return false;
+    }
+    if (a == 10) {
+      return true;
+    }
+    if (a == 192 && b == 168) {
+      return true;
+    }
+    if (a == 172 && b >= 16 && b <= 31) {
+      return true;
+    }
+    return false;
+  }
+
+  /// 尝试判断“当前网络环境下是否仍可能与目标 host 处于同一局域网”
+  ///
+  /// 返回：
+  /// - true：同一局域网（按 IPv4 前三段 /24 判断）
+  /// - false：已明确不在同一局域网
+  /// - null：无法判断（例如暂时取不到本机网卡/无私网 IPv4），不应据此关闭重连
+  Future<bool?> _isHostInSameLanMaybe(String host) async {
+    if (!_isPrivateIpv4(host)) {
+      return null;
+    }
+    final hostParts = host.split('.');
+    if (hostParts.length != 4) {
+      return null;
+    }
+    final hostPrefix = '${hostParts[0]}.${hostParts[1]}.${hostParts[2]}';
+    try {
+      final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        type: InternetAddressType.IPv4,
+      );
+      final prefixes = <String>{};
+      for (final itf in interfaces) {
+        for (final addr in itf.addresses) {
+          final ip = addr.address;
+          if (!_isPrivateIpv4(ip)) {
+            continue;
+          }
+          final parts = ip.split('.');
+          if (parts.length != 4) {
+            continue;
+          }
+          prefixes.add('${parts[0]}.${parts[1]}.${parts[2]}');
+        }
+      }
+      if (prefixes.isEmpty) {
+        return null;
+      }
+      return prefixes.contains(hostPrefix);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 执行“可取消”的异步重连调度
+  Future<void> _scheduleReconnectInternal(int token) async {
+    if (!_autoReconnectEnabled || token != _reconnectScheduleToken) {
+      return;
+    }
+    final String? host = _host;
+    final int? port = _port;
+    if (host == null || port == null) {
+      return;
+    }
+
+    final bool? sameLan = await _isHostInSameLanMaybe(host);
+    if (!_autoReconnectEnabled || token != _reconnectScheduleToken) {
+      return;
+    }
+    if (sameLan == false) {
+      // 关键逻辑：检测到已切换到不同局域网时，停止对旧 IP 的自动重连，避免后台持续重连造成耗电/耗网。
+      DebugUtils.log('检测到网络已切换，停止自动重连: $host:$port', name: 'socket');
+      _autoReconnectEnabled = false;
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+      return;
+    }
+
+    _reconnectAttempts++;
+    if (maxReconnectAttempts != null && _reconnectAttempts >= maxReconnectAttempts!) {
       DebugUtils.log('已达到最大重连次数，停止重连', name: 'socket');
       onError?.call('无法连接到服务器');
       return;
     }
 
-    _reconnectAttempts++;
-    DebugUtils.log('将在$reconnectInterval秒后进行第$_reconnectAttempts次重连...', name: 'socket');
+    // 关键逻辑：PC 服务器可能在系统自启动阶段较晚可用，采用指数退避持续重试，避免固定次数后放弃导致“永远连不上”。
+    final int backoffFactor = 1 << ((_reconnectAttempts - 1).clamp(0, 4));
+    final int nextIntervalSeconds = (reconnectInterval * backoffFactor).clamp(3, 30);
+    DebugUtils.log('将在$nextIntervalSeconds秒后进行第$_reconnectAttempts次重连...', name: 'socket');
 
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(Duration(seconds: reconnectInterval), () {
+    _reconnectTimer = Timer(Duration(seconds: nextIntervalSeconds), () {
       // Timer 触发时可能已经连上/或被禁用重连，直接忽略即可
       if (_state == SocketState.connected || _socket != null || !_autoReconnectEnabled) {
         return;

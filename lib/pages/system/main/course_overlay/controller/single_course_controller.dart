@@ -25,6 +25,7 @@ class SingleCourseController extends GetxController {
 
   Timer? _openCourseTimeoutTimer;
   int _openCourseTimeoutToken = 0;
+  int _connectWaitToken = 0;
   bool _expectWallEnable = false;
   bool _expectDeskEnable = false;
 
@@ -55,6 +56,11 @@ class SingleCourseController extends GetxController {
     _openCourseTimeoutTimer = null;
     _expectWallEnable = false;
     _expectDeskEnable = false;
+  }
+
+  /// 取消当前等待连接流程（用于用户关闭/切换，避免无限等待占用业务流程）
+  void _cancelConnectWait() {
+    _connectWaitToken++;
   }
 
   /// 启动打开课程超时
@@ -310,6 +316,7 @@ class SingleCourseController extends GetxController {
     }
 
     _cancelOpenCourseTimeout();
+    _cancelConnectWait();
     ToastUtils.hide();
     _handler.detachCourse();
 
@@ -340,14 +347,20 @@ class SingleCourseController extends GetxController {
   /// - 连接成功后：发送开启课程指令
   Future<bool> _openCourseOn(
     ServerType serverType,
-    String courseId, {
+    String targetCourseId, {
     bool ensureConnected = true,
   }) async {
     if (!_socketService.isConnected(serverType)) {
       if (!ensureConnected) {
         return false;
       }
-      final connected = await _socketService.ensureConnected(serverType);
+      final int token = ++_connectWaitToken;
+      // 关键逻辑：PC 可能刚开机且服务端自启较慢，这里等待一段时间持续重试，避免“一次失败就永远打不开”。
+      final connected = await _socketService.waitForConnected(
+        serverType,
+        maxWait: null,
+        shouldContinue: () => token == _connectWaitToken && courseId == targetCourseId,
+      );
       if (!connected) {
         return false;
       }
@@ -355,7 +368,7 @@ class SingleCourseController extends GetxController {
     if (!_socketService.isConnected(serverType)) {
       return false;
     }
-    _socketService.controlApplication(serverType, courseId, true);
+    _socketService.controlApplication(serverType, targetCourseId, true);
     return true;
   }
 
@@ -378,6 +391,7 @@ class SingleCourseController extends GetxController {
     }
     if (enabled) {
       _cancelOpenCourseTimeout();
+      final int token = ++_connectWaitToken;
       final bool wallAlreadyEnabled = wallEnabled == true;
       final bool deskAlreadyEnabled = deskEnabled == true;
 
@@ -388,7 +402,14 @@ class SingleCourseController extends GetxController {
       }
 
       if (wallAlreadyEnabled && !deskAlreadyEnabled) {
-        final bool deskConnected = _socketService.isConnected(ServerType.desktop);
+        // 关键逻辑：允许“先开机、后自启服务”的场景在此处触发连接恢复，避免一次失败后永远不再尝试。
+        final bool deskConnected =
+            _socketService.isConnected(ServerType.desktop) ||
+                await _socketService.waitForConnected(
+                  ServerType.desktop,
+                  maxWait: null,
+                  shouldContinue: () => token == _connectWaitToken && courseId == id,
+                );
         if (!deskConnected) {
           ToastUtils.show('桌面服务器未连接', type: ToastType.error);
           update(['course_control_toggle']);
@@ -402,7 +423,14 @@ class SingleCourseController extends GetxController {
       }
 
       if (!wallAlreadyEnabled && deskAlreadyEnabled) {
-        final bool wallConnected = _socketService.isConnected(ServerType.wall);
+        // 关键逻辑：允许“先开机、后自启服务”的场景在此处触发连接恢复，避免一次失败后永远不再尝试。
+        final bool wallConnected =
+            _socketService.isConnected(ServerType.wall) ||
+                await _socketService.waitForConnected(
+                  ServerType.wall,
+                  maxWait: null,
+                  shouldContinue: () => token == _connectWaitToken && courseId == id,
+                );
         if (!wallConnected) {
           ToastUtils.show('墙面服务器未连接', type: ToastType.error);
           update(['course_control_toggle']);
@@ -415,8 +443,26 @@ class SingleCourseController extends GetxController {
         return;
       }
 
-      final bool wallConnected = _socketService.isConnected(ServerType.wall);
-      final bool deskConnected = _socketService.isConnected(ServerType.desktop);
+      // 关键逻辑：整体开启时，缺少连接则主动触发 ensureConnected，适配“App 先启动、PC 后自启”。
+      // 关键逻辑：整体开启时同时等待墙/桌两条连接就绪，避免“只连上一条”导致整体开启失败。
+      final results = await Future.wait<bool>([
+        _socketService.isConnected(ServerType.wall)
+            ? Future.value(true)
+            : _socketService.waitForConnected(
+                ServerType.wall,
+                maxWait: null,
+                shouldContinue: () => token == _connectWaitToken && courseId == id,
+              ),
+        _socketService.isConnected(ServerType.desktop)
+            ? Future.value(true)
+            : _socketService.waitForConnected(
+                ServerType.desktop,
+                maxWait: null,
+                shouldContinue: () => token == _connectWaitToken && courseId == id,
+              ),
+      ]);
+      final bool wallConnected = results[0];
+      final bool deskConnected = results[1];
       if (!wallConnected || !deskConnected) {
         if (!wallConnected && !deskConnected) {
           ToastUtils.show('墙面和桌面服务器均未连接', type: ToastType.error);
@@ -439,6 +485,7 @@ class SingleCourseController extends GetxController {
     }
 
     _cancelOpenCourseTimeout();
+    _cancelConnectWait();
     ToastUtils.hide();
     await _closeCourseOn(ServerType.wall, id);
     await _closeCourseOn(ServerType.desktop, id);
@@ -459,8 +506,10 @@ class SingleCourseController extends GetxController {
     bool success;
     if (enabled) {
       _cancelOpenCourseTimeout();
-      success = await _openCourseOn(ServerType.wall, id, ensureConnected: false);
+      // 关键逻辑：开启课程时若未连接，则触发 ensureConnected（历史 IP 直连→UDP 扫描兜底），覆盖“PC 后启动”场景。
+      success = await _openCourseOn(ServerType.wall, id, ensureConnected: true);
     } else {
+      _cancelConnectWait();
       if (!skipConfirm) {
         final bool confirmed = (await AlertDialog.show(
               '您确定要关闭课程吗？',
@@ -504,8 +553,10 @@ class SingleCourseController extends GetxController {
     bool success;
     if (enabled) {
       _cancelOpenCourseTimeout();
-      success = await _openCourseOn(ServerType.desktop, id, ensureConnected: false);
+      // 关键逻辑：开启课程时若未连接，则触发 ensureConnected（历史 IP 直连→UDP 扫描兜底），覆盖“PC 后启动”场景。
+      success = await _openCourseOn(ServerType.desktop, id, ensureConnected: true);
     } else {
+      _cancelConnectWait();
       if (!skipConfirm) {
         final bool confirmed = (await AlertDialog.show(
               '您确定要关闭课程吗？',

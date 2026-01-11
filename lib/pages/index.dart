@@ -5,3 +5,4 @@ export 'settings/index.dart';
 export 'course/index.dart';
 export 'integration/index.dart';
 export 'system/splash/index.dart';
+export 'logs/index.dart';

@@ -16,6 +16,10 @@ class Global {
   /// - 初始化本地存储
   /// - 启动后异步恢复 Socket 连接（不阻塞启动）
   static Future<void> init() async {
+    // 关键：优先初始化日志落盘，确保启动阶段的错误/打印也能被记录
+    final logService = Get.put(AppLogService(), permanent: true);
+    await logService.init();
+
     // 注册Socket服务（永久单例）
     Get.put(SocketService(), permanent: true);
     // 工具类

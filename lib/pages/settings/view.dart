@@ -56,6 +56,29 @@ class SettingsPage extends GetView<SettingsController> {
                 LongbuttonWidget(
                   width: 1760.w,
                   height: 150.h,
+                  icon: Icon(
+                    Icons.receipt_long,
+                    size: 54.sp,
+                    color: CustomAppColors.text,
+                  ),
+                  name: TextWidget.label(
+                    '日志',
+                    fontSize: 26.sp,
+                  ),
+                  title: TextWidget.label(
+                    '查看近 3 天打印/错误日志',
+                    fontSize: 26.sp,
+                  ),
+                  subIcon: const Icon(Icons.chevron_right),
+                  onTap: () => Get.toNamed(RouteNames.logs),
+                ),
+                SizedBox(
+                  width: 1680.w,
+                  height: 1.h,
+                ).decorated(color: CustomAppColors.border).paddingHorizontal(40.w),
+                LongbuttonWidget(
+                  width: 1760.w,
+                  height: 150.h,
                   icon: ImageWidget.svg(
                     AssetsSvgs.settingsInfoSvg,
                     width: 50.w,

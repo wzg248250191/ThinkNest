@@ -63,6 +63,13 @@ class RoutePages {
       Get.lazyPut<SettingsController>(() => SettingsController());
     }
   }
+
+  /// 确保日志页依赖已注册（避免跳转时 Get.find 直接抛错）
+  static void _ensureLogsDependencies() {
+    if (!Get.isRegistered<LogsController>()) {
+      Get.lazyPut<LogsController>(() => LogsController());
+    }
+  }
   // 列表
   static final List<GetPage> _list = [
     GetPage(
@@ -79,6 +86,11 @@ class RoutePages {
         name: RouteNames.settings,
         page: () => const SettingsPage(),
         binding: _safeBinding(_ensureSettingsDependencies),
+      ),
+      GetPage(
+        name: RouteNames.logs,
+        page: () => const LogsPage(),
+        binding: _safeBinding(_ensureLogsDependencies),
       ),
       GetPage(
         name: RouteNames.systemMain,

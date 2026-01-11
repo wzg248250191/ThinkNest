@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
@@ -14,30 +16,63 @@ import 'common/index.dart';
 /// - 先确保 Flutter 引擎/插件绑定完成，再进行全局初始化
 /// - 在 runApp 前完成横屏锁定与沉浸式/状态栏样式配置，避免首帧 UI 抖动
 Future<void> main() async {
-  final WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-  // 保留 Native Splash 直到自定义启动图资源就绪，避免中间出现“纯白过渡帧”
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  await Global.init();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-  ]);
+  runZonedGuarded(
+    () async {
+      // 关键：确保绑定初始化与 runApp 在同一个 Zone 内，避免 Zone mismatch
+      final WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+      // 保留 Native Splash 直到自定义启动图资源就绪，避免中间出现“纯白过渡帧”
+      FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+      await Global.init();
 
-  // 设置沉浸式布局：让内容延伸到状态栏/导航栏区域
-  await SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
+      // 关键：统一拦截运行时错误并落盘，便于现场回溯问题（不依赖控制台输出）
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FlutterError.presentError(details);
+        AppLogService.tryRecordError(
+          details.exception,
+          details.stack ?? StackTrace.current,
+          tag: 'flutter',
+        );
+      };
 
-  // 统一配置系统 UI 样式：首帧前设置可减少闪烁与二次布局
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      statusBarBrightness: Brightness.light,
-      systemNavigationBarColor: Colors.black,
-      systemNavigationBarIconBrightness: Brightness.light,
+      // 关键：捕获平台派发的未处理异常（Flutter 3+ 推荐路径）
+      PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+        AppLogService.tryRecordError(error, stack, tag: 'platform');
+        return false;
+      };
+
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+      ]);
+
+      // 设置沉浸式布局：让内容延伸到状态栏/导航栏区域
+      await SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.edgeToEdge,
+      );
+
+      // 统一配置系统 UI 样式：首帧前设置可减少闪烁与二次布局
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.black,
+          systemNavigationBarIconBrightness: Brightness.light,
+        ),
+      );
+      runApp(const MyApp());
+    },
+    (Object error, StackTrace stack) {
+      // 关键：兜底捕获 Zone 内未处理异常，避免“异步异常丢失”导致无法排查
+      AppLogService.tryRecordError(error, stack, tag: 'zone');
+    },
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) {
+        parent.print(zone, line);
+        // 关键：将所有 print 输出统一落盘为“打印日志”
+        AppLogService.tryRecordPrint(line, tag: 'print');
+      },
     ),
   );
-  runApp(const MyApp());
 }
 
 /// 应用根组件

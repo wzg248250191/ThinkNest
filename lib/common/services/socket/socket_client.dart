@@ -35,7 +35,10 @@ class SocketClient {
   
   /// 发送缓冲队列
   final List<Uint8List> _sendBuffer = [];
-  
+
+  bool _isDrainingSendBuffer = false;
+  bool _hasVerboseSendSinceLastDrain = false;
+
   /// 接收数据缓冲
   final List<int> _receiveBuffer = [];
   
@@ -251,49 +254,54 @@ class SocketClient {
       return;
     }
 
+    if (!silent) {
+      _hasVerboseSendSinceLastDrain = true;
+    }
+    if (_isDrainingSendBuffer) {
+      return;
+    }
+    _isDrainingSendBuffer = true;
+    unawaited(_drainSendBuffer());
+  }
+
+  /// 串行写入并 flush 发送缓冲，避免并发写导致 StreamSink 状态异常。
+  Future<void> _drainSendBuffer() async {
     try {
-      while (_sendBuffer.isNotEmpty) {
-        final bytes = _sendBuffer.removeAt(0);
-        _socket?.add(bytes);
-        
-        if (!silent) {
-          // DebugUtils.log('📤 数据已写入Socket，字节数: ${bytes.length}', name: 'socket');
-          // 打印完整的十六进制数据（用于调试）
-          if (bytes.length < 200) {
-            // DebugUtils.log(
-            //   '   HEX: ${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}',
-            //   name: 'socket',
-            // );
-          }
+      while (isConnected) {
+        final socket = _socket;
+        if (socket == null) {
+          return;
         }
-      }
-      
-      // 强制刷新 Socket 缓冲区，确保数据立即发送
-      final socket = _socket;
-      if (socket != null) {
-        // 检查 Socket 状态
+
+        final bool silent = !_hasVerboseSendSinceLastDrain;
+        _hasVerboseSendSinceLastDrain = false;
+
+        while (_sendBuffer.isNotEmpty) {
+          final bytes = _sendBuffer.removeAt(0);
+          socket.add(bytes);
+        }
+
         if (!silent) {
           DebugUtils.log('📡 Socket状态检查:', name: 'socket');
           DebugUtils.log('   - remoteAddress: ${socket.remoteAddress.address}', name: 'socket');
           DebugUtils.log('   - remotePort: ${socket.remotePort}', name: 'socket');
           DebugUtils.log('   - done: 正在刷新...', name: 'socket');
         }
-        
-        socket.flush().then((_) {
-          if (!silent) {
-            // DebugUtils.log('📤 Socket缓冲区已刷新，数据已发送到网络', name: 'socket');
-          }
-        }).catchError((e) {
-          DebugUtils.log('❌ 刷新Socket缓冲区失败: $e', name: 'socket');
-          DebugUtils.log('   可能连接已断开', name: 'socket');
-        });
-      } else {
-        DebugUtils.log('❌ Socket 为 null，无法发送', name: 'socket');
+
+        await socket.flush();
+        if (_sendBuffer.isEmpty) {
+          return;
+        }
       }
-      
     } catch (e) {
       DebugUtils.log('❌ 发送数据出错: $e', name: 'socket');
       onError?.call('发送数据出错: $e');
+      _handleDisconnect();
+    } finally {
+      _isDrainingSendBuffer = false;
+      if (_sendBuffer.isNotEmpty && isConnected) {
+        _processSendBuffer(silent: true);
+      }
     }
   }
 
@@ -390,6 +398,9 @@ class SocketClient {
     _updateState(SocketState.disconnected);
     _socket = null;
     _sendBuffer.clear();
+    // 关键逻辑：断线时重置发送 drain 状态，避免“旧 drain”持续占用导致后续无法发送。
+    _isDrainingSendBuffer = false;
+    _hasVerboseSendSinceLastDrain = false;
     _receiveBuffer.clear();
 
     // 如果不是主动断开，则尝试重连

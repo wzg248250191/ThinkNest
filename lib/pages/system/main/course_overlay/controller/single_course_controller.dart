@@ -484,6 +484,18 @@ class SingleCourseController extends GetxController {
       return;
     }
 
+    final bool confirmed = (await AlertDialog.show(
+          '您确定要关闭课程吗？',
+        )) ==
+        true;
+    if (!confirmed) {
+      // 关键逻辑：用户取消关闭时回滚整体开关显示状态，避免 UI 停留在“关闭”。
+      wholeEnabled = wallEnabled == true && deskEnabled == true;
+      update(['course_control_toggle']);
+      return;
+    }
+
+    // 关键逻辑：仅在用户确认关闭后再取消等待/超时与加载提示，避免误触导致打开流程被提前打断。
     _cancelOpenCourseTimeout();
     _cancelConnectWait();
     ToastUtils.hide();

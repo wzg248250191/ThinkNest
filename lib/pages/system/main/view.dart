@@ -1,7 +1,6 @@
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:get/get.dart';
 import '../../../common/index.dart';
 import '../../index.dart';
@@ -13,38 +12,9 @@ class MainPage extends StatefulWidget {
   State<MainPage> createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage>
-    with AutomaticKeepAliveClientMixin {
-  bool _hasTriggeredNativeSplashRemove = false;
-
+class _MainPageState extends State<MainPage> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _precacheSplashAndRemoveNativeIfNeeded();
-  }
-
-  /// 预缓存自定义启动图资源，并在首帧后移除 Native Splash
-  Future<void> _precacheSplashAndRemoveNativeIfNeeded() async {
-    if (_hasTriggeredNativeSplashRemove) {
-      return;
-    }
-    _hasTriggeredNativeSplashRemove = true;
-
-    try {
-      await precacheImage(const AssetImage(AssetsImages.splashPng), context);
-    } catch (_) {
-      // 预缓存失败时仍需移除 Native Splash，避免停留在系统启动页无法进入应用
-    }
-
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
-      return;
-    }
-    FlutterNativeSplash.remove();
-  }
 
   @override
   /// 构建主页面并保持页面状态不被回收

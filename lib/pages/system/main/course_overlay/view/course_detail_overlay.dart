@@ -63,7 +63,7 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
         },
       ),
     ].toColumn().decorated(
-          color: CustomAppColors.background,
+          color: Color(0xFFEFEFEF),
           borderRadius: BorderRadius.circular(20.r),
         );
   }
@@ -96,7 +96,7 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
       _buildControllToggle().paddingBottom(100.h),
       _buildVolume(),
     ].toColumn().decorated(
-          color: CustomAppColors.background,
+          color: Color(0xFFEFEFEF),
           borderRadius: BorderRadius.circular(20.r),
         );
   }

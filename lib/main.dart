@@ -106,8 +106,9 @@ class MyApp extends StatelessWidget {
           darkTheme: darkTheme,
 
           // 路由
-          // 启动直接进入主页面：通过主页面上的启动遮罩完成“完全热启动”预热
-          initialRoute: RouteNames.systemMain,
+          // 关键逻辑：启动先进入自定义 SplashPage，让 Native Splash 尽快移除，
+          // 后续在 Flutter Splash 期间完成预加载，减少“原生启动图停留过久”的体感。
+          initialRoute: RouteNames.systemSplash,
           getPages: RoutePages.list,
           navigatorObservers: [RoutePages.observer],
 

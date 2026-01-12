@@ -17,7 +17,7 @@ class Wallpart extends GetView<WallController> {
   Widget _buildView(BuildContext context) {
     return <Widget>[
       _buildCard('学生互动区', WallArea.left),
-      _buildCard('老师讲解区区', WallArea.middle),
+      _buildCard('老师讲解区', WallArea.middle),
       _buildCard('学生互动区', WallArea.right),
     ]
         .toRow(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.center)
@@ -94,7 +94,7 @@ class Wallpart extends GetView<WallController> {
         .width(410.w)
         .height(610.h)
         .decorated(
-          color: CustomAppColors.border,
+          color: Color(0xFFF6F6F6),
           borderRadius: BorderRadius.circular(12.r),
         );
   }

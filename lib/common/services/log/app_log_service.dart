@@ -94,7 +94,8 @@ class AppLogService extends GetxService {
     }
     final lines = await file.readAsLines();
     final start = lines.length > tailLines ? lines.length - tailLines : 0;
-    final sliced = lines.sublist(start);
+    // 关键逻辑：日志列表展示需要“最新在上”；文件按追加写入，尾部是最新，因此这里倒序返回。
+    final sliced = lines.sublist(start).reversed;
     return sliced
         .map(_parseLine)
         .whereType<AppLogLine>()

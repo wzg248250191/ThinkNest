@@ -90,7 +90,12 @@ class SocketClient {
   /// - 建立 TCP 长连接用于发送/接收封包后的 protobuf `MESSAGE`
   /// - 连接成功后会启动心跳，避免长时间空闲被系统/路由器断开
   /// - [autoReconnect] 为 false 时：连接失败/断开不会触发自动重连（适合启动阶段尝试）
-  Future<bool> connect(String host, int port, {bool autoReconnect = true}) async {
+  Future<bool> connect(
+    String host,
+    int port, {
+    bool autoReconnect = true,
+    Duration? timeout,
+  }) async {
     if (isConnected) {
       final bool sameEndpoint = _host == host && _port == port;
       if (sameEndpoint) {
@@ -114,7 +119,33 @@ class SocketClient {
     _reconnectTimer = null;
     _reconnectAttempts = 0;
     
-    return await _doConnect();
+    return await _doConnect(timeout: timeout);
+  }
+
+  /// 使用上次记录的 host/port 立即发起一次 TCP 重连
+  ///
+  /// 说明：
+  /// - 仅做一次连接尝试，不触发自动重连（由调用方决定是否持续重试）
+  /// - 若没有历史 endpoint（从未连接过）会直接返回 false
+  Future<bool> reconnect({Duration? timeout}) async {
+    if (isConnected) {
+      return true;
+    }
+    final String? host = _host;
+    final int? port = _port;
+    if (host == null || port == null) {
+      return false;
+    }
+    if (_state == SocketState.connecting) {
+      return false;
+    }
+    _isManualDisconnect = false;
+    // 关键逻辑：仅做一次重连尝试，避免在业务侧未要求时后台无限重连造成耗电/耗网。
+    _autoReconnectEnabled = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempts = 0;
+    return await _doConnect(timeout: timeout);
   }
 
   /// 动态切换自动重连开关（通常用于：启动连接成功后再启用持续重连）
@@ -131,7 +162,7 @@ class SocketClient {
   /// 说明：
   /// - 负责真正的 Socket.connect 与数据监听注册
   /// - 连接失败时会按重连策略自动重试（非主动断开情况下）
-  Future<bool> _doConnect() async {
+  Future<bool> _doConnect({Duration? timeout}) async {
     try {
       _updateState(SocketState.connecting);
       DebugUtils.log('正在连接到服务器 $_host:$_port...', name: 'socket');
@@ -139,7 +170,7 @@ class SocketClient {
       _socket = await Socket.connect(
         _host!,
         _port!,
-        timeout: Duration(milliseconds: MessageConstants.timeOut),
+        timeout: timeout ?? Duration(milliseconds: MessageConstants.timeOut),
       );
 
       DebugUtils.log('Socket连接成功: ${_socket?.remoteAddress.address}:${_socket?.remotePort}', name: 'socket');

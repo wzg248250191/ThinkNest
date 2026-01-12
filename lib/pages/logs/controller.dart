@@ -204,7 +204,14 @@ class LogsController extends GetxController {
 
   /// 清除当前选中日期的日志文件（仅影响该天，不影响其它日期与导出文件）
   Future<void> clearCurrentDay() async {
-    final ok = await AlertDialog.show('确定清除$selectedDayLabel日志？');
+    final bool ok =
+        (await ConfirmDialog.show<bool>(
+          title: '确定清除$selectedDayLabel日志？',
+          layout: ConfirmDialogLayout.titleFixed,
+          returnBoolResult: true,
+          barrierDismissible: false,
+        )) ??
+        false;
     if (!ok) return;
     try {
       await AppLogService.instance.clearDay(selectedDay);

@@ -11,6 +11,79 @@
 part of 'socket_service.dart';
 
 mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin {
+  /// 按“单次连接会话”去重发送课程列表请求
+  void _requestCourseListOncePerConnection(ServerType serverType) {
+    final endpoint = _endpoint(serverType);
+    if (endpoint.hasRequestedCourseListInCurrentConnection) {
+      return;
+    }
+    // 关键逻辑：同一次 TCP 连接建立过程中，connect() 返回与 connected 状态回调可能同时触发；
+    // 这里用 endpoint 级别标记确保每次连接只发送一次 CourseList。
+    endpoint.hasRequestedCourseListInCurrentConnection = true;
+    requestCourseList(serverType);
+  }
+
+  /// 点击触发的单次连接尝试：历史 IP 直连一次，失败后 UDP 扫描一次
+  ///
+  /// 说明：
+  /// - 用于“用户操作时若未连接，立刻提示失败，但后台做一次连接准备”的场景
+  /// - 不开启自动重连，避免后台持续重连造成耗电/耗网
+  /// - 内部做并发去重：同一 ServerType 同时触发只会跑一次
+  Future<bool> connectOncePreferLastEndpointThenUdp(
+    ServerType serverType, {
+    Duration connectTimeout = const Duration(seconds: 2),
+    Duration udpTimeout = const Duration(seconds: 2),
+  }) {
+    final inFlight = _connectOnceInFlight[serverType];
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final future = _connectOncePreferLastEndpointThenUdpInternal(
+      serverType,
+      connectTimeout: connectTimeout,
+      udpTimeout: udpTimeout,
+    ).whenComplete(() => _connectOnceInFlight.remove(serverType));
+    _connectOnceInFlight[serverType] = future;
+    return future;
+  }
+
+  /// connectOncePreferLastEndpointThenUdp 的内部实现
+  ///
+  /// 说明：
+  /// - 先走历史 IP 直连（一次）
+  /// - 失败后做 UDP 扫描并连接（一次）
+  Future<bool> _connectOncePreferLastEndpointThenUdpInternal(
+    ServerType serverType, {
+    required Duration connectTimeout,
+    required Duration udpTimeout,
+  }) async {
+    if (_clientManager.getClient(serverType).isConnected) {
+      return true;
+    }
+
+    final bool connectedByLastIp = await connectToLastEndpoint(
+      serverType,
+      autoReconnect: false,
+      connectTimeout: connectTimeout,
+    );
+    if (connectedByLastIp && _clientManager.getClient(serverType).isConnected) {
+      return true;
+    }
+
+    final servers = await _scanForServersOnce(timeout: udpTimeout);
+    final discovered = _pickDiscoveredServer(servers, serverType);
+    if (discovered == null) {
+      return false;
+    }
+    return await connect(
+      serverType,
+      discovered.ipAddress,
+      discovered.tcpPort,
+      autoReconnect: false,
+      connectTimeout: connectTimeout,
+    );
+  }
+
   /// 获取本机当前可用的 IPv4 /24 网段前缀（例如 192.168.101）
   Future<List<String>> _localIpv4CClassPrefixes() async {
     try {
@@ -123,7 +196,13 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   /// 说明：
   /// - [autoReconnect] 控制断线后是否自动重连（启动阶段可关闭，业务阶段建议开启）
   /// - 连接成功后会持久化 IP/端口，供下次启动直接直连
-  Future<bool> connect(ServerType serverType, String host, int port, {bool autoReconnect = true}) async {
+  Future<bool> connect(
+    ServerType serverType,
+    String host,
+    int port, {
+    bool autoReconnect = true,
+    Duration? connectTimeout,
+  }) async {
     if (!await _isServerInSameLan(host)) {
       // 关键逻辑：只允许连接“当前本机所在网段”内的服务器，避免跨网段误连旧场地设备。
       DebugUtils.log(
@@ -133,13 +212,35 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
       return false;
     }
     final success =
-        await _clientManager.connect(serverType, host, port, autoReconnect: autoReconnect);
+        await _clientManager.connect(serverType, host, port, autoReconnect: autoReconnect, timeout: connectTimeout);
     if (success) {
       _endpoint(serverType).connectedServerIp.value = host;
       unawaited(_persistLastServerEndpoint(serverType, host, port));
-      requestCourseList(serverType);
     }
     return success;
+  }
+
+  /// 仅使用历史缓存的 IP/端口发起直连（不做 UDP 扫描）
+  ///
+  /// 说明：
+  /// - 用于“业务点击触发时希望快速验证连接是否可用”的场景
+  /// - 若没有历史缓存则直接返回 false
+  Future<bool> connectToLastEndpoint(
+    ServerType serverType, {
+    bool autoReconnect = false,
+    Duration? connectTimeout,
+  }) async {
+    final endpoint = _loadLastServerEndpoint(serverType);
+    if (endpoint == null) {
+      return false;
+    }
+    return await connect(
+      serverType,
+      endpoint.ip,
+      endpoint.port,
+      autoReconnect: autoReconnect,
+      connectTimeout: connectTimeout,
+    );
   }
 
   /// 连接到发现的服务器
@@ -481,6 +582,10 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   void _onServerStateChanged(ServerType serverType, SocketState state) {
     final endpoint = _endpoint(serverType);
     endpoint.connectionState.value = state;
+    if (state == SocketState.connecting || state == SocketState.disconnected || state == SocketState.failed) {
+      // 关键逻辑：一旦进入新一轮连接尝试（或连接失败/断开），需要重置标记，确保下次 connected 会补发一次课程列表。
+      endpoint.hasRequestedCourseListInCurrentConnection = false;
+    }
     if (state == SocketState.disconnected) {
       endpoint.connectedServerIp.value = null;
     }
@@ -493,9 +598,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
           endpoint.connectedServerIp.value = cached.ip;
         }
       }
-      if (courseList.isEmpty) {
-        requestCourseList(serverType);
-      }
+      _requestCourseListOncePerConnection(serverType);
     }
     //当所有服务器连接都断开时，重置课程列表相关的 UI 状态 。
     /*if (!_clientManager.isAnyConnected) {

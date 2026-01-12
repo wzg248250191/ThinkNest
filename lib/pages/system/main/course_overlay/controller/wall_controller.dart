@@ -163,8 +163,29 @@ class WallController extends GetxController {
       return;
     }
 
+    // 关键逻辑：点击“重新启动”时先将“关闭墙面/关闭互动”回到默认状态，避免重启后 UI 保留旧的关闭态。
+    _updatePowerState(area, false);
+    _updateInteractState(area, false);
+    if (_handler.isWallDoubleControl.value) {
+      // 关键逻辑：双控模式下左右墙面状态联动显示；重启任一侧时同步复位另一侧，避免 UI 不一致。
+      if (area == WallArea.left) {
+        rightPower.value = false;
+        rightInteract.value = false;
+      } else if (area == WallArea.right) {
+        leftPower.value = false;
+        leftInteract.value = false;
+      }
+    }
+
     final bool success = await _sendWallRestart(area);
     if (!success) {
+      ToastUtils.show('墙面服务器未连接');
+      return;
+    }
+
+    // 关键逻辑：重启后补发“开启互动”指令，确保墙面互动区默认处于开启状态。
+    final bool interactOpened = await _sendWallInteract(area, false);
+    if (!interactOpened) {
       ToastUtils.show('墙面服务器未连接');
     }
   }

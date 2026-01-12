@@ -11,7 +11,7 @@ class ClearCacheDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ConfirmDialog(
-      message: '确定清空本地缓存数据？',
+      title: '确定清空本地缓存数据？',
       leftText: '取消',
       rightText: '确定',
       onRightTap: () async {
@@ -20,7 +20,6 @@ class ClearCacheDialog extends StatelessWidget {
         _showSuccessToast();
       },
       width: 380.w,
-      height: 230.h,
     );
   }
 

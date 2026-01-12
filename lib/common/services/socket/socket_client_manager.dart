@@ -89,9 +89,14 @@ class SocketClientManager {
   /// 说明：
   /// - [autoReconnect] 用于控制底层 SocketClient 是否在断线后自动重连
   /// - 启动阶段通常传 false，连接成功后再由上层手动开启重连
-  Future<bool> connectToWall(String host, int port, {bool autoReconnect = true}) async {
+  Future<bool> connectToWall(
+    String host,
+    int port, {
+    bool autoReconnect = true,
+    Duration? timeout,
+  }) async {
     DebugUtils.log('连接到墙面服务器: $host:$port', name: 'socket');
-    final success = await _wallClient.connect(host, port, autoReconnect: autoReconnect);
+    final success = await _wallClient.connect(host, port, autoReconnect: autoReconnect, timeout: timeout);
     if (success) {
       _wallServerIp = host;
     }
@@ -101,9 +106,14 @@ class SocketClientManager {
   /// 连接到桌面服务器
   ///
   /// 说明同 [connectToWall]
-  Future<bool> connectToDesktop(String host, int port, {bool autoReconnect = true}) async {
+  Future<bool> connectToDesktop(
+    String host,
+    int port, {
+    bool autoReconnect = true,
+    Duration? timeout,
+  }) async {
     DebugUtils.log('连接到桌面服务器: $host:$port', name: 'socket');
-    final success = await _desktopClient.connect(host, port, autoReconnect: autoReconnect);
+    final success = await _desktopClient.connect(host, port, autoReconnect: autoReconnect, timeout: timeout);
     if (success) {
       _desktopServerIp = host;
     }
@@ -114,13 +124,28 @@ class SocketClientManager {
   ///
   /// 说明：
   /// - 统一入口，便于上层在“墙/桌”两条链路复用相同的连接策略
-  Future<bool> connect(ServerType serverType, String host, int port, {bool autoReconnect = true}) async {
+  Future<bool> connect(
+    ServerType serverType,
+    String host,
+    int port, {
+    bool autoReconnect = true,
+    Duration? timeout,
+  }) async {
     switch (serverType) {
       case ServerType.wall:
-        return await connectToWall(host, port, autoReconnect: autoReconnect);
+        return await connectToWall(host, port, autoReconnect: autoReconnect, timeout: timeout);
       case ServerType.desktop:
-        return await connectToDesktop(host, port, autoReconnect: autoReconnect);
+        return await connectToDesktop(host, port, autoReconnect: autoReconnect, timeout: timeout);
     }
+  }
+
+  /// 使用当前客户端记录的 endpoint 立即发起一次 TCP 重连
+  ///
+  /// 说明：
+  /// - 用于“断开后希望快速恢复”的场景
+  /// - 若客户端没有历史 endpoint（从未连接过）会直接返回 false
+  Future<bool> reconnect(ServerType serverType, {Duration? timeout}) async {
+    return await getClient(serverType).reconnect(timeout: timeout);
   }
 
   /// 断开墙面服务器

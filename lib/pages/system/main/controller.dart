@@ -75,13 +75,46 @@ class MainController extends GetxController {
     if (currentBackPressTime == null ||
         now.difference(currentBackPressTime!) > const Duration(seconds: 4)) {
       currentBackPressTime = now;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Center(child: Text('Press again to exit the application.')),
-          duration: Duration(seconds: 4),
-        ),
-      );
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            margin: EdgeInsets.only(bottom: 24.h),
+            padding: EdgeInsets.zero,
+            duration: const Duration(seconds: 2),
+            content: Center(
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
+                decoration: BoxDecoration(
+                  color: scheme.inverseSurface.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(12.r),
+                  border: Border.all(
+                    color: scheme.onInverseSurface.withValues(alpha: 0.10),
+                    width: 1.w,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 12.r,
+                      offset: Offset(0, 6.h),
+                    ),
+                  ],
+                ),
+                child: TextWidget.label(
+                  '再按一次退出应用',
+                  fontSize: 24.sp,
+                  color: scheme.onInverseSurface,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        );
       return false;
     }
 

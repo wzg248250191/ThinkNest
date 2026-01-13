@@ -127,17 +127,17 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
             ToggleWidget(
               firstIcon: ImageWidget.svg(
                 AssetsSvgs.closeSvg,
-                width: 90.w,
-                height: 30.h,
+               // width: 90.w,
+               height: 35.h,
               ),
               secondIcon: ImageWidget.svg(
                 AssetsSvgs.openSvg,
-                width: 90.w,
-                height: 30.h,
+               // width: 90.w,
+                height: 35.h,
               ),
               value: controller.wholeEnabled,
               onChanged: controller.setWholeEnabled,
-            ).paddingRight(40.w),
+            ).paddingRight(20.w),
           ].toRow().paddingTop(20.h),
           <Widget>[
             TextWidget.label('墙面', fontSize: 28.sp).paddingLeft(37.w),
@@ -150,17 +150,17 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
             ToggleWidget(
               firstIcon: ImageWidget.svg(
                 AssetsSvgs.closeSvg,
-                width: 90.w,
-                height: 30.h,
+               // width: 90.w,
+                height: 35.h,
               ),
               secondIcon: ImageWidget.svg(
                 AssetsSvgs.openSvg,
-                width: 90.w,
-                height: 30.h,
+                //width: 90.w,
+                height: 35.h,
               ),
               value: controller.wallEnabled,
               onChanged: controller.setWallEnabled,
-            ).paddingRight(40.w),
+            ).paddingRight(20.w),
           ].toRow().paddingTop(8.h),
           <Widget>[
             TextWidget.label('桌面', fontSize: 28.sp).paddingLeft(37.w),
@@ -173,17 +173,17 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
             ToggleWidget(
               firstIcon: ImageWidget.svg(
                 AssetsSvgs.closeSvg,
-                width: 90.w,
-                height: 30.h,
+               // width: 90.w,
+                height: 35.h,
               ),
               secondIcon: ImageWidget.svg(
                 AssetsSvgs.openSvg,
-                width: 90.w,
-                height: 30.h,
+               // width: 90.w,
+                height: 35.h, 
               ),
               value: controller.deskEnabled,
               onChanged: controller.setDeskEnabled,
-            ).paddingRight(40.w),
+            ).paddingRight(20.w),
           ].toRow().paddingTop(8.h),
         ].toColumn();
       },

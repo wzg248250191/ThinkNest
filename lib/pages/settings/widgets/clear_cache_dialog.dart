@@ -19,7 +19,6 @@ class ClearCacheDialog extends StatelessWidget {
         await Future.delayed(const Duration(milliseconds: 300));
         _showSuccessToast();
       },
-      width: 380.w,
     );
   }
 

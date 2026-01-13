@@ -446,7 +446,7 @@ class SingleCourseController extends GetxController {
     final bool confirmed =
         (await ConfirmDialog.show<bool>(
           title: '您确定要关闭课程吗？',
-          layout: ConfirmDialogLayout.titleFixed,
+          layout: ConfirmDialogLayout.verticalButtons,
           returnBoolResult: true,
           barrierDismissible: false,
         )) ??
@@ -496,7 +496,7 @@ class SingleCourseController extends GetxController {
         final bool confirmed =
             (await ConfirmDialog.show<bool>(
               title: '您确定要关闭课程吗？',
-              layout: ConfirmDialogLayout.titleFixed,
+              layout: ConfirmDialogLayout.verticalButtons,
               returnBoolResult: true,
               barrierDismissible: false,
             )) ??
@@ -557,7 +557,7 @@ class SingleCourseController extends GetxController {
         final bool confirmed =
             (await ConfirmDialog.show<bool>(
               title: '您确定要关闭课程吗？',
-              layout: ConfirmDialogLayout.titleFixed,
+              layout: ConfirmDialogLayout.verticalButtons,
               returnBoolResult: true,
               barrierDismissible: false,
             )) ??

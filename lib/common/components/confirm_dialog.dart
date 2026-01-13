@@ -7,8 +7,8 @@ import 'package:get/get.dart';
 import '../index.dart';
 
 enum ConfirmDialogLayout {
-  bottomFixed,
-  titleFixed,
+  horizontalButtons,
+  verticalButtons,
 }
 
 /// 通用二次确认弹窗（正文 + 底部左右两个操作按钮）。
@@ -33,7 +33,8 @@ class ConfirmDialog extends StatelessWidget {
     double? buttonFontSize,
     double? width,
     double? buttonHeight,
-    ConfirmDialogLayout layout = ConfirmDialogLayout.bottomFixed,
+    EdgeInsets? insetPadding,
+    ConfirmDialogLayout layout = ConfirmDialogLayout.horizontalButtons,
     bool returnBoolResult = false,
     bool barrierDismissible = false,
     Color? barrierColor,
@@ -54,6 +55,7 @@ class ConfirmDialog extends StatelessWidget {
         buttonFontSize: buttonFontSize,
         width: width,
         buttonHeight: buttonHeight,
+        insetPadding: insetPadding,
         layout: layout,
         returnBoolResult: returnBoolResult,
       ),
@@ -74,13 +76,16 @@ class ConfirmDialog extends StatelessWidget {
     double? buttonFontSize,
     double? width,
     double? buttonHeight,
-    this.layout = ConfirmDialogLayout.bottomFixed,
+    EdgeInsets? insetPadding,
+    this.layout = ConfirmDialogLayout.horizontalButtons,
     this.returnBoolResult = false,
   })  : titleFontSize = titleFontSize ?? 30.sp,
-        titleHeight = titleHeight ?? 100.h,
+        titleHeight = titleHeight ?? 50.h,
         buttonFontSize = buttonFontSize ?? 32.sp,
-        width = width ?? 300.w,
+        width = width ?? 430.w,
         buttonHeight = buttonHeight ?? 90.h,
+        insetPadding =
+            insetPadding ?? EdgeInsets.symmetric(horizontal: 40.w, vertical: 24.h),
         leftText = leftText ?? '取消',
         rightText = rightText ?? '确认';
 
@@ -113,6 +118,8 @@ class ConfirmDialog extends StatelessWidget {
 
   /// 底部按钮条高度
   final double buttonHeight;
+
+  final EdgeInsets insetPadding;
 
   final ConfirmDialogLayout layout;
 
@@ -168,8 +175,8 @@ class ConfirmDialog extends StatelessWidget {
     bool leftPressed = false;
     bool rightPressed = false;
 
-    final bool isVertical = layout == ConfirmDialogLayout.titleFixed;
-    // 关键逻辑：弹窗高度按“标题高度 + 按钮高度 + 分隔线 + Padding”等总和自适应。
+    final bool isVertical = layout == ConfirmDialogLayout.verticalButtons;
+    // 关键逻辑：标题高度按“文字测量高度（多行时变高）”自适应，并以 titleHeight 作为最小高度兜底。
     // 同时限制最大高度，避免总高度超过屏幕可用高度（标题区可滚动）。
     final double resolvedButtonHeight = buttonHeight;
     final double buttonsHeight =
@@ -187,10 +194,38 @@ class ConfirmDialog extends StatelessWidget {
             titlePadding.vertical)
         .clamp(0, double.infinity)
         .toDouble();
+
+    final double maxTitleTextWidth =
+        (width - titlePadding.horizontal).clamp(0, double.infinity).toDouble();
+    final themeTextStyle = Theme.of(context).textTheme.bodyMedium;
+    final TextStyle titleStyle = TextStyle(
+      color: context.colors.scheme.onSurface,
+      fontSize: titleFontSize,
+      fontWeight: FontWeight.w500,
+      fontFamily: themeTextStyle?.fontFamily,
+      fontFamilyFallback: themeTextStyle?.fontFamilyFallback,
+      decoration: TextDecoration.none,
+    );
+    final TextPainter titlePainter = TextPainter(
+      text: TextSpan(text: title, style: titleStyle),
+      textDirection: Directionality.of(context),
+      textAlign: TextAlign.center,
+      locale: Localizations.localeOf(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout(maxWidth: maxTitleTextWidth);
+
+    final int explicitLineCount = title.split('\n').length;
+    final double minHeightFromNewlines =
+        explicitLineCount * titlePainter.preferredLineHeight;
+    final double measuredTitleContentHeight = titlePainter.height < minHeightFromNewlines
+        ? minHeightFromNewlines
+        : titlePainter.height;
     final double resolvedTitleContentHeight =
-        titleHeight.clamp(0, maxTitleContentHeight).toDouble();
+        measuredTitleContentHeight < titleHeight ? titleHeight : measuredTitleContentHeight;
+    final double clampedTitleContentHeight =
+        resolvedTitleContentHeight.clamp(0, maxTitleContentHeight).toDouble();
     final double titleAreaHeight =
-        (resolvedTitleContentHeight + titlePadding.vertical)
+        (clampedTitleContentHeight + titlePadding.vertical)
             .clamp(0, maxDialogHeight - dividerThickness - buttonsHeight)
             .toDouble();
 
@@ -225,123 +260,131 @@ class ConfirmDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Container(
-          width: width,
-          decoration: BoxDecoration(
-            color: CustomAppColors.card,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxDialogHeight),
-            child: <Widget>[
-              SizedBox(
-                height: titleAreaHeight,
-                child: Padding(
-                  padding: titlePadding,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
-                          ),
-                          child: Center(
-                            child: TextWidget.label(
-                              title,
-                              fontSize: titleFontSize,
-                              textAlign: TextAlign.center,
-                              weight: FontWeight.w500,
-                              softWrap: true,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+      insetPadding: EdgeInsets.zero,
+      child: Padding(
+        padding: insetPadding,
+        child: Center(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            child: Container(
+              width: width,
+              decoration: BoxDecoration(
+                color: CustomAppColors.card,
               ),
-              SizedBox(height: dividerThickness).decorated(color: dividerColor),
-              SizedBox(
-                height: buttonsHeight,
-                child: IntrinsicHeight(
-                  child: StatefulBuilder(
-                    builder: (context, setState) {
-                      if (isVertical) {
-                        // 关键逻辑：纵向布局下，每个按钮的高度固定为 buttonHeight，不再按剩余高度平分
-                        return <Widget>[
-                          SizedBox(
-                            height: resolvedButtonHeight,
-                            child: _buildActionButton(
-                              pressed: rightPressed,
-                              onPressedChanged: (v) =>
-                                  setState(() => rightPressed = v),
-                              pressedColor: pressedColor,
-                              text: rightText,
-                              textFontSize: buttonFontSize,
-                              textColor: CustomAppColors.primary,
-                              onTrigger: buildRightTrigger(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxDialogHeight),
+                child: <Widget>[
+                  SizedBox(
+                    height: titleAreaHeight,
+                    child: Padding(
+                      padding: titlePadding,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight,
+                              ),
+                              child: Center(
+                                child: TextWidget.label(
+                                  title,
+                                  fontSize: titleFontSize,
+                                  softWrap: true,
+                                  weight: FontWeight.w500,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
                             ),
-                          ),
-                          SizedBox(height: dividerThickness)
-                              .decorated(color: dividerColor),
-                          SizedBox(
-                            height: resolvedButtonHeight,
-                            child: _buildActionButton(
-                              pressed: leftPressed,
-                              onPressedChanged: (v) =>
-                                  setState(() => leftPressed = v),
-                              pressedColor: pressedColor,
-                              text: leftText,
-                              textFontSize: buttonFontSize,
-                              textColor: CustomAppColors.buttonLight,
-                              onTrigger: buildLeftTrigger(),
-                            ),
-                          ),
-                        ].toColumn(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                        );
-                      }
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: dividerThickness)
+                      .decorated(color: dividerColor),
+                  SizedBox(
+                    height: buttonsHeight,
+                    child: IntrinsicHeight(
+                      child: StatefulBuilder(
+                        builder: (context, setState) {
+                          if (isVertical) {
+                            return <Widget>[
+                              SizedBox(
+                                height: resolvedButtonHeight,
+                                child: _buildActionButton(
+                                  pressed: rightPressed,
+                                  onPressedChanged: (v) =>
+                                      setState(() => rightPressed = v),
+                                  pressedColor: pressedColor,
+                                  text: rightText,
+                                  textFontSize: buttonFontSize,
+                                  textColor: CustomAppColors.primary,
+                                  onTrigger: buildRightTrigger(),
+                                ),
+                              ),
+                              SizedBox(height: dividerThickness)
+                                  .decorated(color: dividerColor),
+                              SizedBox(
+                                height: resolvedButtonHeight,
+                                child: _buildActionButton(
+                                  pressed: leftPressed,
+                                  onPressedChanged: (v) =>
+                                      setState(() => leftPressed = v),
+                                  pressedColor: pressedColor,
+                                  text: leftText,
+                                  textFontSize: buttonFontSize,
+                                  textColor: CustomAppColors.buttonLight,
+                                  onTrigger: buildLeftTrigger(),
+                                ),
+                              ),
+                            ].toColumn(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                            );
+                          }
 
-                      return <Widget>[
-                        Expanded(
-                          child: _buildActionButton(
-                            pressed: leftPressed,
-                            onPressedChanged: (v) =>
-                                setState(() => leftPressed = v),
-                            pressedColor: pressedColor,
-                            text: leftText,
-                            textFontSize: buttonFontSize,
-                            textColor: CustomAppColors.buttonLight,
-                            onTrigger: buildLeftTrigger(),
-                          ),
-                        ),
-                        VerticalDivider(
-                          width: 1.w,
-                          thickness: 1.w,
-                          color: dividerColor,
-                        ),
-                        Expanded(
-                          child: _buildActionButton(
-                            pressed: rightPressed,
-                            onPressedChanged: (v) =>
-                                setState(() => rightPressed = v),
-                            pressedColor: pressedColor,
-                            text: rightText,
-                            textFontSize: buttonFontSize,
-                            textColor: CustomAppColors.buttonLight,
-                            onTrigger: buildRightTrigger(),
-                          ),
-                        ),
-                      ].toRow(crossAxisAlignment: CrossAxisAlignment.stretch);
-                    },
+                          return <Widget>[
+                            Expanded(
+                              child: _buildActionButton(
+                                pressed: leftPressed,
+                                onPressedChanged: (v) =>
+                                    setState(() => leftPressed = v),
+                                pressedColor: pressedColor,
+                                text: leftText,
+                                textFontSize: buttonFontSize,
+                                textColor: CustomAppColors.buttonLight,
+                                onTrigger: buildLeftTrigger(),
+                              ),
+                            ),
+                            VerticalDivider(
+                              width: 1.w,
+                              thickness: 1.w,
+                              color: dividerColor,
+                            ),
+                            Expanded(
+                              child: _buildActionButton(
+                                pressed: rightPressed,
+                                onPressedChanged: (v) =>
+                                    setState(() => rightPressed = v),
+                                pressedColor: pressedColor,
+                                text: rightText,
+                                textFontSize: buttonFontSize,
+                                textColor: CustomAppColors.buttonLight,
+                                onTrigger: buildRightTrigger(),
+                              ),
+                            ),
+                          ].toRow(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                          );
+                        },
+                      ),
+                    ),
                   ),
+                ].toColumn(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                 ),
               ),
-            ].toColumn(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
             ),
           ),
         ),

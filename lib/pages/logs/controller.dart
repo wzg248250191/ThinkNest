@@ -207,7 +207,7 @@ class LogsController extends GetxController {
     final bool ok =
         (await ConfirmDialog.show<bool>(
           title: '确定清除$selectedDayLabel日志？',
-          layout: ConfirmDialogLayout.titleFixed,
+          layout: ConfirmDialogLayout.verticalButtons,
           returnBoolResult: true,
           barrierDismissible: false,
         )) ??

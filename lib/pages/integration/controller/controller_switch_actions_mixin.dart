@@ -73,9 +73,10 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       update(kIntegrationUpdateIds);
 
       await ConfirmDialog.show<void>(
-        title: '请检查所有设备是否已经关闭，\n如有设备未关闭强制断电可能会对设备造成一定的损坏，\n请谨慎使用',
+        title: '请检查所有设备是否已经关闭，\n如有设备未关闭强制断电\n可能会对设备造成一定的损坏，\n请谨慎使用',
         leftText: '取消',
         rightText: '确定',
+        width: 500.w,
         onRightTap: () async {
           await _toggleSwitch(type, false);
         },

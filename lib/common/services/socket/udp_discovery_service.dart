@@ -258,16 +258,18 @@ class UdpDiscoveryService {
           // 关键逻辑：过滤非本机所在局域网的响应，避免跨网段发现到其它场地服务器。
           return;
         }
+
+        final CLIENTEND serverType = message.hasEchoData() ? message.echoData.clientEnd : CLIENTEND.Desktop;
         
         // 检查是否已发现
-        if (_discoveredServers.any((s) => s.ipAddress == serverIp)) {
+        if (_discoveredServers.any((s) => s.ipAddress == serverIp && s.serverType == serverType)) {
           return;
         }
 
         final server = DiscoveredServer(
           ipAddress: serverIp,
           tcpPort: iPadServerPort,
-          serverType: message.hasEchoData() ? message.echoData.clientEnd : CLIENTEND.Desktop,
+          serverType: serverType,
           discoveredAt: DateTime.now(),
           echoMessage: message.hasEchoData() ? message.echoData.echomsg : null,
         );

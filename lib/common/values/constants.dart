@@ -25,6 +25,9 @@ class StorageKeys {
   /// Socket 记住的“桌面服务器端口” key
   static const String lastDesktopServerPort = 'socket_last_desktop_server_port_v1';
 
+  /// Socket 日志开关（重要日志）
+  static const String socketLogEnabled = 'socket_log_enabled_v1';
+
   /// 一体化页面“设备配置”本地存储 key
   static const String integrationDeviceConfigs = 'integration_device_configs_v1';
 

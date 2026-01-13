@@ -10,13 +10,18 @@ class LogsPage extends GetView<LogsController> {
 
   /// 构建“近3天”日期切换栏
   Widget _buildDayTabs() {
+    const double outerButtonWidth = 150;
+    const double outerButtonHeight = 52;
+
     // 构建单个日期标签按钮
     Widget buildTab(String text, int offset) {
       final active = controller.dayOffset == offset;
       return GestureDetector(
         onTap: () => controller.selectDayOffset(offset),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 14.h),
+          width: outerButtonWidth.w,
+          height: outerButtonHeight.h,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: active ? CustomAppColors.primary : Colors.white,
             borderRadius: BorderRadius.circular(12.r),
@@ -24,7 +29,7 @@ class LogsPage extends GetView<LogsController> {
           ),
           child: TextWidget.label(
             text,
-            fontSize: 24.sp,
+            fontSize: 22.sp,
             color: active ? Colors.white : CustomAppColors.text,
           ),
         ),
@@ -33,11 +38,11 @@ class LogsPage extends GetView<LogsController> {
 
     return <Widget>[
       buildTab('今天', 0),
-      SizedBox(width: 16.w),
+      SizedBox(width: 10.w),
       buildTab('昨天', 1),
-      SizedBox(width: 16.w),
+      SizedBox(width: 10.w),
       buildTab('前天', 2),
-    ].toRow(mainAxisAlignment: MainAxisAlignment.center);
+    ].toRow(mainAxisSize: MainAxisSize.min);
   }
 
   /// 构建日志类型筛选栏：全部/错误/打印
@@ -46,11 +51,12 @@ class LogsPage extends GetView<LogsController> {
       id: 'logs_filters',
       builder: (_) {
         return ExclusiveButtonGroup(
+          // 关键：顶部功能条要求“所有按钮视觉尺寸一致”，这里与日期/操作按钮保持一致
           labels: const ['全部', '错误', '打印'],
           selectedIndex: controller.filterIndex,
           onSelected: controller.selectFilterIndex,
-          buttonWidth: 160.w,
-          buttonHeight: 60.h,
+          buttonWidth: 150.w,
+          buttonHeight: 52.h,
           groupRadius: 14.r,
           fontSize: 22.sp,
           borderWidth: 1.w,
@@ -64,58 +70,79 @@ class LogsPage extends GetView<LogsController> {
     return GetBuilder<LogsController>(
       id: 'logs_actions',
       builder: (_) {
+        const double outerButtonWidth = 150;
+        const double outerButtonHeight = 52;
+        const double buttonFontSize = 20;
+        const double innerButtonWidth = outerButtonWidth - 16;
+        const double innerButtonHeight = outerButtonHeight - 8;
+
         if (!controller.selectionMode) {
           return <Widget>[
             ButtonWidget.primary(
               '导出当天',
               onTap: controller.exportDay,
-              width: 220.w,
-              height: 70.h,
+              scale: WidgetScale.medium,
+              fontSize: buttonFontSize.sp,
+              width: innerButtonWidth.w,
+              height: innerButtonHeight.h,
             ),
-            SizedBox(width: 16.w),
+            SizedBox(width: 10.w),
             ButtonWidget.secondary(
               '加载更多',
               onTap: controller.loadMore,
-              width: 220.w,
-              height: 70.h,
+              scale: WidgetScale.medium,
+              fontSize: buttonFontSize.sp,
+              width: innerButtonWidth.w,
+              height: innerButtonHeight.h,
             ),
-            SizedBox(width: 16.w),
+            SizedBox(width: 10.w),
             ButtonWidget.destructive(
               '清除当天',
               onTap: controller.clearCurrentDay,
-              width: 220.w,
-              height: 70.h,
+              scale: WidgetScale.medium,
+              fontSize: buttonFontSize.sp,
+              width: innerButtonWidth.w,
+              height: innerButtonHeight.h,
             ),
-          ].toRow(mainAxisAlignment: MainAxisAlignment.center);
+          ].toRow(mainAxisSize: MainAxisSize.min);
         }
 
         return <Widget>[
-          TextWidget.label(
-            '已选 ${controller.selectedIndexes.length} 行',
-            fontSize: 24.sp,
+          ButtonWidget.secondary(
+            '已选${controller.selectedIndexes.length}',
+            scale: WidgetScale.medium,
+            fontSize: buttonFontSize.sp,
+            width: innerButtonWidth.w,
+            height: innerButtonHeight.h,
           ),
-          SizedBox(width: 16.w),
+          SizedBox(width: 10.w),
           ButtonWidget.primary(
             '复制',
             onTap: controller.copySelected,
-            width: 180.w,
-            height: 70.h,
+            scale: WidgetScale.medium,
+            fontSize: buttonFontSize.sp,
+            width: innerButtonWidth.w,
+            height: innerButtonHeight.h,
           ),
-          SizedBox(width: 16.w),
+          SizedBox(width: 10.w),
           ButtonWidget.secondary(
             '导出',
             onTap: controller.exportSelected,
-            width: 180.w,
-            height: 70.h,
+            scale: WidgetScale.medium,
+            fontSize: buttonFontSize.sp,
+            width: innerButtonWidth.w,
+            height: innerButtonHeight.h,
           ),
-          SizedBox(width: 16.w),
+          SizedBox(width: 10.w),
           ButtonWidget.secondary(
             '取消',
             onTap: controller.exitSelectionMode,
-            width: 180.w,
-            height: 70.h,
+            scale: WidgetScale.medium,
+            fontSize: buttonFontSize.sp,
+            width: innerButtonWidth.w,
+            height: innerButtonHeight.h,
           ),
-        ].toRow(mainAxisAlignment: MainAxisAlignment.center);
+        ].toRow(mainAxisSize: MainAxisSize.min);
       },
     );
   }
@@ -253,14 +280,68 @@ class LogsPage extends GetView<LogsController> {
 
   /// 构建页面主体布局
   Widget _buildView() {
+    final BoxDecoration groupDecoration = BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12.r),
+      border: Border.all(color: CustomAppColors.border),
+    );
+
     return <Widget>[
-      SizedBox(height: 22.h),
-      _buildDayTabs(),
-      SizedBox(height: 14.h),
-      _buildFilters(),
-      SizedBox(height: 18.h),
-      _buildActions(),
-      SizedBox(height: 18.h),
+      SizedBox(height: 12.h),
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: 40.w),
+        child: <Widget>[
+          Container(
+            padding: EdgeInsets.all(6.w),
+            decoration: groupDecoration,
+            child: GetBuilder<LogsController>(
+              id: 'logs_day_tabs',
+              builder: (_) => _buildDayTabs(),
+            ),
+          ),
+          SizedBox(width: 10.w),
+          Container(
+            padding: EdgeInsets.all(6.w),
+            decoration: groupDecoration,
+            child: _buildFilters(),
+          ),
+          SizedBox(width: 10.w),
+          Container(
+            padding: EdgeInsets.all(6.w),
+            decoration: groupDecoration,
+            child: _buildActions(),
+          ),
+          SizedBox(width: 10.w),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+            decoration: groupDecoration.copyWith(borderRadius: BorderRadius.circular(999.r)),
+            child: GetBuilder<LogsController>(
+              id: 'socket_log_switch',
+              builder: (_) {
+                final enabled = DebugUtils.socketLogEnabled;
+                return <Widget>[
+                  TextWidget.label(
+                    'Socket',
+                    fontSize: 20.sp,
+                    color: CustomAppColors.text.withValues(alpha: 0.7),
+                  ),
+                  SizedBox(width: 8.w),
+                  Switch(
+                    value: enabled,
+                    activeThumbColor: CustomAppColors.primary,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    onChanged: (value) {
+                      DebugUtils.setSocketLogEnabled(value).then((_) => controller.update(['socket_log_switch']));
+                    },
+                  ),
+                ].toRow(mainAxisSize: MainAxisSize.min);
+              },
+            ),
+          ),
+        ].toRow(mainAxisSize: MainAxisSize.min),
+      ),
+      SizedBox(height: 12.h),
       Expanded(child: _buildList()),
     ].toColumn();
   }

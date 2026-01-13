@@ -33,10 +33,12 @@ class DiscoveredServer {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is DiscoveredServer && other.ipAddress == ipAddress;
+    return other is DiscoveredServer &&
+        other.ipAddress == ipAddress &&
+        other.tcpPort == tcpPort &&
+        other.serverType == serverType;
   }
 
   @override
-  int get hashCode => ipAddress.hashCode;
+  int get hashCode => Object.hash(ipAddress, tcpPort, serverType);
 }
-

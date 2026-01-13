@@ -9,6 +9,16 @@ class Global {
     DebugUtils.log(message, name: 'global');
   }
 
+  /// 设置 Socket 日志开关（用于控制 socket tag 的日志输出）
+  static Future<void> setSocketLogEnabled(bool enabled) async {
+    await DebugUtils.setSocketLogEnabled(enabled);
+  }
+
+  /// 获取 Socket 日志开关当前状态
+  static bool isSocketLogEnabled() {
+    return DebugUtils.socketLogEnabled;
+  }
+
   /// 全局初始化入口
   ///
   /// 说明：
@@ -24,6 +34,8 @@ class Global {
     Get.put(SocketService(), permanent: true);
     // 工具类
     await Storage().init();
+    // 关键逻辑：从本地存储加载 Socket 日志开关，默认关闭以避免刷屏。
+    await DebugUtils.initSocketLogSwitch();
 
     // 注册并初始化配置服务（GetX 常驻服务），确保主题/版本等信息在首屏前可用
     await Get.putAsync<ConfigService>(() async => await ConfigService().init());

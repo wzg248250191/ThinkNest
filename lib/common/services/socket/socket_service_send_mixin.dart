@@ -20,7 +20,6 @@ mixin SocketServiceSendMixin on SocketServiceBase {
   /// - 最终由底层 SocketClient 完成：封包（头+长度+cmd）→ 写入 TCP Socket
   void sendToServer(ServerType serverType, ServerMessage serverMessage) {
     _clientManager.sendTo(serverType, _buildServerRequest(serverMessage));
-    DebugUtils.log('发送服务器消息到${serverType.displayName}: ${serverMessage.serverBehaviour}', name: 'socket');
   }
 
   /// 发送消息到所有已连接的服务器
@@ -37,7 +36,6 @@ mixin SocketServiceSendMixin on SocketServiceBase {
   /// - 适用于 Unity 的 Operation/Data 两类控制消息
   void sendToUnity(ServerType serverType, UnityMessage unityMessage) {
     _clientManager.sendTo(serverType, _buildUnityRequest(unityMessage));
-    DebugUtils.log('发送Unity消息到${serverType.displayName}: ${unityMessage.unityMSGtype}', name: 'socket');
   }
 
   // ==================== 便捷方法 ====================

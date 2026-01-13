@@ -253,7 +253,7 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     }
   }
 
-  /// 停止墙面/桌面对应 Socket 的自动重连，并断开连接
+  /// 停止墙面/桌面对应 Socket 的自动重连
   ///
   /// 说明：
   /// - 用于“开关关闭”或“等待窗口超时”等场景，确保不会继续后台打印“第 N 次重连”并消耗网络/电量
@@ -266,8 +266,8 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       return;
     }
     final SocketService socketService = Get.find<SocketService>();
+    // 关键逻辑：关闭开关时仅停止自动重连，不主动断开现有连接，避免影响其它依赖同一连接的业务链路。
     socketService.clientManager.setAutoReconnectEnabled(serverType, false);
-    socketService.disconnect(serverType);
   }
 
   /// 开启墙面/桌面后，等待 PC 服务端自启完成并尝试连接对应服务器
@@ -282,6 +282,14 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       return;
     }
     if (!Get.isRegistered<SocketService>()) {
+      DebugUtils.log(
+        '开关开始尝试连接|${type.displayName}|${serverType.displayName}',
+        name: 'socket',
+      );
+      DebugUtils.log(
+        '开关连接结果|${type.displayName}|${serverType.displayName}|失败',
+        name: 'socket',
+      );
       return;
     }
 
@@ -294,24 +302,61 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     const Duration delay = Duration(seconds: 2);
     const Duration udpTimeout = Duration(seconds: 3);
 
+    DebugUtils.log(
+      '开关开始尝试连接|${type.displayName}|${serverType.displayName}',
+      name: 'socket',
+    );
+
     while (true) {
       if (!_mustSwitchState(type).isOn) {
+        DebugUtils.log(
+          '开关连接结果|${type.displayName}|${serverType.displayName}|失败',
+          name: 'socket',
+        );
         _stopSocketReconnectForSwitch(type);
         return;
       }
       if (DateTime.now().isAfter(deadline)) {
+        DebugUtils.log(
+          '开关连接结果|${type.displayName}|${serverType.displayName}|失败',
+          name: 'socket',
+        );
         _stopSocketReconnectForSwitch(type);
         return;
       }
       if (socketService.isConnected(serverType)) {
+        DebugUtils.log(
+          '开关连接结果|${type.displayName}|${serverType.displayName}|成功',
+          name: 'socket',
+        );
         return;
       }
 
-      final bool ok = await socketService.ensureConnected(
-        serverType,
-        udpTimeout: udpTimeout,
-      );
-      if (ok) {
+      bool ok = false;
+      try {
+        ok = await socketService
+            .ensureConnected(
+              serverType,
+              autoReconnect: false,
+              udpTimeout: udpTimeout,
+              priority: 1,
+              source: 'integration_switch',
+            )
+            .timeout(
+              udpTimeout + const Duration(seconds: 5),
+              onTimeout: () {
+                return false;
+              },
+            );
+      } catch (e) {
+        ok = false;
+      }
+      final bool connectedNow = socketService.isConnected(serverType);
+      if (ok && connectedNow) {
+        DebugUtils.log(
+          '开关连接结果|${type.displayName}|${serverType.displayName}|成功',
+          name: 'socket',
+        );
         return;
       }
 

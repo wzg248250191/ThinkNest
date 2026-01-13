@@ -21,6 +21,9 @@ enum SocketState {
 
 /// Socket客户端
 class SocketClient {
+  /// 创建 Socket 客户端并配置自动重连策略
+  SocketClient({this.maxReconnectAttempts = 20});
+
   /// Socket实例
   Socket? _socket;
   
@@ -37,7 +40,6 @@ class SocketClient {
   final List<Uint8List> _sendBuffer = [];
 
   bool _isDrainingSendBuffer = false;
-  bool _hasVerboseSendSinceLastDrain = false;
 
   /// 接收数据缓冲
   final List<int> _receiveBuffer = [];
@@ -60,8 +62,12 @@ class SocketClient {
   /// 重连尝试次数
   int _reconnectAttempts = 0;
   
-  /// 最大重连次数（null 表示不设上限，适配“PC 自启动较慢”场景）
-  final int? maxReconnectAttempts = null;
+  /// 最大重连次数（null 表示不设上限）
+  ///
+  /// 说明：
+  /// - 默认设置为 20：避免断线后后台长期重连造成耗电/耗网/刷日志
+  /// - 如需“始终在线”场景，可在创建 client 时传 null
+  final int? maxReconnectAttempts;
   
   /// 重连间隔（秒）
   final int reconnectInterval = 3;
@@ -99,7 +105,6 @@ class SocketClient {
     if (isConnected) {
       final bool sameEndpoint = _host == host && _port == port;
       if (sameEndpoint) {
-        DebugUtils.log('Socket已经连接', name: 'socket');
         return true;
       }
       disconnect();
@@ -164,9 +169,7 @@ class SocketClient {
   /// - 连接失败时会按重连策略自动重试（非主动断开情况下）
   Future<bool> _doConnect({Duration? timeout}) async {
     try {
-      _updateState(SocketState.connecting);
-      DebugUtils.log('正在连接到服务器 $_host:$_port...', name: 'socket');
-
+      _updateState(SocketState.connecting);     
       _socket = await Socket.connect(
         _host!,
         _port!,
@@ -193,7 +196,7 @@ class SocketClient {
       
       return true;
     } catch (e) {
-      DebugUtils.log('Socket连接失败: $e', name: 'socket');
+     // DebugUtils.log('Socket连接失败: $e', name: 'socket');
       _updateState(SocketState.failed);
       onError?.call('连接失败: $e');
       
@@ -213,81 +216,31 @@ class SocketClient {
   /// - 发送前会进行连接状态校验，避免写入已断开的 Socket
   void sendMessage(MESSAGE message) {
     if (!isConnected) {
-      DebugUtils.log('❌ Socket未连接，无法发送消息', name: 'socket');
-      DebugUtils.log('   当前状态: $_state', name: 'socket');
-      DebugUtils.log('   目标地址: $_host:$_port', name: 'socket');
       onError?.call('Socket未连接');
       return;
     }
 
     try {
-      // 心跳消息不输出日志
-      final isHeartbeat = message.mSGtype == MSGTYPE.HeartEcho;
-      
-      if (!isHeartbeat) {
-        // 打印消息详情（非心跳消息）
-        DebugUtils.log('======== 发送消息 ========', name: 'socket');
-        DebugUtils.log('目标服务器: $_host:$_port', name: 'socket');
-        DebugUtils.log('消息类型: ${message.mSGtype}', name: 'socket');
-        
-        if (message.hasServerMessage()) {
-          final sm = message.serverMessage;
-          DebugUtils.log('ServerMessage:', name: 'socket');
-          DebugUtils.log('  - serverBehaviour: ${sm.serverBehaviour}', name: 'socket');
-          DebugUtils.log('  - gameName: "${sm.gameName}"', name: 'socket');
-          DebugUtils.log('  - on: ${sm.on}', name: 'socket');
-          if (sm.hasVolumeValue()) {
-            DebugUtils.log('  - volumeValue: ${sm.volumeValue}', name: 'socket');
-          }
-        }
-        
-        if (message.hasUnityMessage()) {
-          final um = message.unityMessage;
-          DebugUtils.log('UnityMessage:', name: 'socket');
-          DebugUtils.log('  - unityMSGtype: ${um.unityMSGtype}', name: 'socket');
-          if (um.hasOperation()) {
-            DebugUtils.log('  - operation: ${um.operation}', name: 'socket');
-          }
-        }
-      }
-      
       final bytes = MessageParser.encodeMessage(message);
-      
-      if (!isHeartbeat) {
-        DebugUtils.log('编码后字节数: ${bytes.length}', name: 'socket');
-        DebugUtils.log(
-          '消息头: ${bytes.sublist(0, 13).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}',
-          name: 'socket',
-        );
-      }
-      
       _sendBuffer.add(bytes);
-      _processSendBuffer(silent: isHeartbeat);
-      
-      if (!isHeartbeat) {
-        DebugUtils.log('✅ 消息已发送', name: 'socket');
-        DebugUtils.log('==========================', name: 'socket');
-      }
+      // 关键逻辑：发送缓冲采用单通道 drain，避免并发写导致 Socket 状态异常。
+      _processSendBuffer();
     } catch (e) {
-      DebugUtils.log('❌ 发送消息失败: $e', name: 'socket');
+      DebugUtils.log('发送消息错误: $e', name: 'socket');
       onError?.call('发送消息失败: $e');
     }
   }
 
   /// 处理发送缓冲
-  /// [silent] 为 true 时不输出日志（用于心跳等频繁消息）
   /// 
   /// 说明：
   /// - 将待发送字节队列依次写入 Socket
   /// - 写入后调用 `flush()`，尽量让数据及时进入系统网络栈
-  void _processSendBuffer({bool silent = false}) {
+  void _processSendBuffer() {
     if (_sendBuffer.isEmpty || !isConnected) {
       return;
     }
 
-    if (!silent) {
-      _hasVerboseSendSinceLastDrain = true;
-    }
     if (_isDrainingSendBuffer) {
       return;
     }
@@ -304,19 +257,9 @@ class SocketClient {
           return;
         }
 
-        final bool silent = !_hasVerboseSendSinceLastDrain;
-        _hasVerboseSendSinceLastDrain = false;
-
         while (_sendBuffer.isNotEmpty) {
           final bytes = _sendBuffer.removeAt(0);
           socket.add(bytes);
-        }
-
-        if (!silent) {
-          DebugUtils.log('📡 Socket状态检查:', name: 'socket');
-          DebugUtils.log('   - remoteAddress: ${socket.remoteAddress.address}', name: 'socket');
-          DebugUtils.log('   - remotePort: ${socket.remotePort}', name: 'socket');
-          DebugUtils.log('   - done: 正在刷新...', name: 'socket');
         }
 
         await socket.flush();
@@ -325,13 +268,13 @@ class SocketClient {
         }
       }
     } catch (e) {
-      DebugUtils.log('❌ 发送数据出错: $e', name: 'socket');
+      DebugUtils.log('发送数据错误: $e', name: 'socket');
       onError?.call('发送数据出错: $e');
       _handleDisconnect();
     } finally {
       _isDrainingSendBuffer = false;
       if (_sendBuffer.isNotEmpty && isConnected) {
-        _processSendBuffer(silent: true);
+        _processSendBuffer();
       }
     }
   }
@@ -340,6 +283,11 @@ class SocketClient {
   void _onDataReceived(Uint8List data) {
     try {
       _receiveBuffer.addAll(data);
+      if (_receiveBuffer.length > MessageConstants.bufferMaxSize) {
+        onError?.call('接收缓冲区溢出，已重置连接');
+        _handleDisconnect();
+        return;
+      }
       _processReceiveBuffer();
     } catch (e) {
       DebugUtils.log('处理接收数据出错: $e', name: 'socket');
@@ -363,14 +311,14 @@ class SocketClient {
         
         final head = MessageParser.unParseHead(headerBytes);
         if (head == null) {
-          DebugUtils.log('解析消息头失败', name: 'socket');
+          DebugUtils.log('解析消息头错误', name: 'socket');
           _receiveBuffer.clear();
           break;
         }
 
         // 验证魔术头
         if (head.header != MessageConstants.header) {
-          DebugUtils.log('无效的消息头: ${head.header}', name: 'socket');
+          DebugUtils.log('无效消息头错误: ${head.header}', name: 'socket');
           _receiveBuffer.clear();
           break;
         }
@@ -397,13 +345,12 @@ class SocketClient {
         if (messageData != null) {
           // 解析protobuf消息
           final message = MESSAGE.fromBuffer(messageData.body.buffBytes);
-          DebugUtils.log('收到消息，类型: ${message.mSGtype}', name: 'socket');
           onMessageReceived?.call(message);
         } else {
-          DebugUtils.log('解析消息数据失败', name: 'socket');
+          DebugUtils.log('解析消息数据错误', name: 'socket');
         }
       } catch (e) {
-        DebugUtils.log('处理消息出错: $e', name: 'socket');
+        DebugUtils.log('处理消息错误: $e', name: 'socket');
         _receiveBuffer.clear();
         break;
       }
@@ -431,7 +378,6 @@ class SocketClient {
     _sendBuffer.clear();
     // 关键逻辑：断线时重置发送 drain 状态，避免“旧 drain”持续占用导致后续无法发送。
     _isDrainingSendBuffer = false;
-    _hasVerboseSendSinceLastDrain = false;
     _receiveBuffer.clear();
 
     // 如果不是主动断开，则尝试重连
@@ -543,7 +489,11 @@ class SocketClient {
 
     _reconnectAttempts++;
     if (maxReconnectAttempts != null && _reconnectAttempts >= maxReconnectAttempts!) {
+      // 关键逻辑：达到上限后关闭自动重连，避免断线回调重复触发重连调度导致持续刷日志。
       DebugUtils.log('已达到最大重连次数，停止重连', name: 'socket');
+      _autoReconnectEnabled = false;
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
       onError?.call('无法连接到服务器');
       return;
     }
@@ -600,7 +550,7 @@ class SocketClient {
   void _updateState(SocketState newState) {
     if (_state != newState) {
       _state = newState;
-      DebugUtils.log('Socket状态变更: $newState', name: 'socket');
+      //DebugUtils.log('Socket状态变更: $newState', name: 'socket');
       onStateChanged?.call(newState);
     }
   }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:think_nest/common/proto/Common.pb.dart';
-import '../../utils/index.dart';
 import 'socket_client.dart';
 import 'server_type.dart';
 
@@ -95,7 +94,6 @@ class SocketClientManager {
     bool autoReconnect = true,
     Duration? timeout,
   }) async {
-    DebugUtils.log('连接到墙面服务器: $host:$port', name: 'socket');
     final success = await _wallClient.connect(host, port, autoReconnect: autoReconnect, timeout: timeout);
     if (success) {
       _wallServerIp = host;
@@ -112,7 +110,7 @@ class SocketClientManager {
     bool autoReconnect = true,
     Duration? timeout,
   }) async {
-    DebugUtils.log('连接到桌面服务器: $host:$port', name: 'socket');
+    //DebugUtils.log('连接到桌面服务器: $host:$port', name: 'socket');
     final success = await _desktopClient.connect(host, port, autoReconnect: autoReconnect, timeout: timeout);
     if (success) {
       _desktopServerIp = host;
@@ -181,7 +179,6 @@ class SocketClientManager {
   /// 发送消息到墙面服务器
   void sendToWall(MESSAGE message) {
     if (!isWallConnected) {
-      DebugUtils.log('墙面服务器未连接，无法发送消息', name: 'socket');
       onError?.call(ServerType.wall, '墙面服务器未连接');
       return;
     }
@@ -191,7 +188,6 @@ class SocketClientManager {
   /// 发送消息到桌面服务器
   void sendToDesktop(MESSAGE message) {
     if (!isDesktopConnected) {
-      DebugUtils.log('桌面服务器未连接，无法发送消息', name: 'socket');
       onError?.call(ServerType.desktop, '桌面服务器未连接');
       return;
     }

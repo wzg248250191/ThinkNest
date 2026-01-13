@@ -81,8 +81,6 @@ abstract class SocketServiceBase extends GetxService {
   /// 防止同一 ServerType 在短时间内被多处重复触发“确保连接”的并发请求
   final Map<ServerType, Future<bool>> _ensureConnectInFlight = {};
 
-  final Map<ServerType, Future<bool>> _connectOnceInFlight = {};
-
   /// 防止同一时刻多处触发 UDP 扫描，导致网络广播风暴与 UI 抖动
   Future<List<DiscoveredServer>>? _scanServersInFlight;
   

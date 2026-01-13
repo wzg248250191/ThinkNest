@@ -85,6 +85,7 @@ class LogsController extends GetxController {
   /// 控制器初始化：默认加载今天日志
   void onInit() {
     super.onInit();
+    DebugUtils.initSocketLogSwitch().then((_) => update(['socket_log_switch']));
     loadLogs(resetTail: true);
   }
 
@@ -93,6 +94,8 @@ class LogsController extends GetxController {
     if (offset < 0 || offset > 2) return;
     if (dayOffset == offset) return;
     dayOffset = offset;
+    // 关键：顶部日期切换按钮使用 GetBuilder 局部刷新，需要主动触发更新以显示选中态
+    update(['logs_day_tabs']);
     exitSelectionMode();
     loadLogs(resetTail: true);
   }

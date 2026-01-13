@@ -6,26 +6,26 @@ class PulseDot extends StatefulWidget {
   final double size;
   final Color color;
   final bool enabled;
-  const PulseDot({super.key, required this.size, required this.color, this.enabled = true});
+  const PulseDot({super.key, required this.size, required this.color, this.enabled = false});
   @override
   State<PulseDot> createState() => _PulseDotState();
 }
 
 class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  );
+  AnimationController? _ctrl;
   @override
   void initState() {
     super.initState();
     if (widget.enabled) {
-      _ctrl.repeat(reverse: true);
+      _ctrl = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 900),
+      )..repeat(reverse: true);
     }
   }
   @override
   void dispose() {
-    _ctrl.dispose();
+    _ctrl?.dispose();
     super.dispose();
   }
   @override
@@ -33,23 +33,31 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
     super.didUpdateWidget(oldWidget);
     if (oldWidget.enabled != widget.enabled) {
       if (widget.enabled) {
-        _ctrl.repeat(reverse: true);
+        final ctrl = _ctrl ??
+            AnimationController(
+              vsync: this,
+              duration: const Duration(milliseconds: 900),
+            );
+        _ctrl = ctrl;
+        ctrl.repeat(reverse: true);
       } else {
-        _ctrl.stop();
+        _ctrl?.stop();
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 计算一次，避免在 builder 中重复计算
-    final maxDelta = 24.w;
-    final rippleSize = widget.size + 2 * maxDelta;
+    final maxDelta = 8.w;
+    final coreSize = widget.size * 0.7;
+    final rippleSize = coreSize + 2 * maxDelta;
+    final rippleStrokeWidth = 1.2.w;
+    final staticProgress = 0.35;
     
     // 核心圆点部分保持不变
     final core = Container(
-      width: widget.size,
-      height: widget.size,
+      width: coreSize,
+      height: coreSize,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: widget.color,
@@ -60,14 +68,36 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
       return SizedBox(
         width: widget.size,
         height: widget.size,
-        child: core,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            IgnorePointer(
+              child: SizedBox(
+                width: rippleSize,
+                height: rippleSize,
+                child: CustomPaint(
+                  painter: _RipplePainter(
+                    color: widget.color,
+                    progress: staticProgress,
+                    coreSize: coreSize,
+                    maxDelta: maxDelta,
+                    rings: 3,
+                    strokeWidth: rippleStrokeWidth,
+                  ),
+                ),
+              ),
+            ),
+            core,
+          ],
+        ),
       );
     }
-    
+
     return AnimatedBuilder(
-      animation: _ctrl,
+      animation: _ctrl!,
       builder: (context, child) {
-        final v = _ctrl.value;
+        final v = _ctrl!.value;
         return SizedBox(
           width: widget.size,
           height: widget.size,
@@ -75,7 +105,7 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
             clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
-              child!, // 使用缓存的 child
+              child!,
               IgnorePointer(
                 child: SizedBox(
                   width: rippleSize,
@@ -84,9 +114,10 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
                     painter: _RipplePainter(
                       color: widget.color,
                       progress: v,
-                      coreSize: widget.size,
+                      coreSize: coreSize,
                       maxDelta: maxDelta,
                       rings: 3,
+                      strokeWidth: rippleStrokeWidth,
                     ),
                   ),
                 ),
@@ -95,7 +126,7 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
           ),
         );
       },
-      child: core, // 传递 child 避免每次重建
+      child: core,
     );
   }
 }
@@ -106,6 +137,7 @@ class _RipplePainter extends CustomPainter {
   final double coreSize;
   final double maxDelta;
   final int rings;
+  final double strokeWidth;
   
   const _RipplePainter({
     required this.color,
@@ -113,14 +145,13 @@ class _RipplePainter extends CustomPainter {
     required this.coreSize,
     required this.maxDelta,
     required this.rings,
+    required this.strokeWidth,
   });
   
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final strokeWidth = 1.2.w;
     
-    // 预计算避免在循环中重复计算
     final coreSizeHalf = coreSize / 2;
     
     for (int i = 0; i < rings; i++) {
@@ -128,20 +159,17 @@ class _RipplePainter extends CustomPainter {
       final r = coreSizeHalf + maxDelta * t;
       final op = (1.0 - t).clamp(0.0, 1.0);
       
-      // 创建 Paint 对象
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth
         ..color = color.withValues(alpha: op)
-        ..isAntiAlias = true; // 启用抗锯齿
-      
+        ..isAntiAlias = true;
       canvas.drawCircle(center, r, paint);
     }
   }
   
   @override
   bool shouldRepaint(covariant _RipplePainter oldDelegate) {
-    // 只有 progress 变化时才重绘，其他属性应该保持不变
     return oldDelegate.progress != progress;
   }
   

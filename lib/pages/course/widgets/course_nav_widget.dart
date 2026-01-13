@@ -196,7 +196,6 @@ class CourseNavWidget extends GetView<CourseController> {
                 child: PulseDot(
                   size: selectedSize,
                   color: CustomAppColors.primary,
-                  enabled: !controller.isNavAnimating,
                 ),
               ),
             ),

@@ -55,8 +55,9 @@ class CoursePage extends GetView<CourseController> {
                       ),
                       child: <Widget>[
                         PulseDot(
-                          size: 14.w,
+                          size: 25.w,
                           color: CustomAppColors.primary,
+                          enabled: true,
                         ),
                         SizedBox(width: 12.w),
                         TextWidget.label(
@@ -123,9 +124,6 @@ class CoursePage extends GetView<CourseController> {
   /// - 代价：首次进入会更慢、内存占用更高（由 Splash 白屏/启动图遮挡）
   Widget _buildEagerCourseList() {
     final List<Widget> children = <Widget>[];
-
-    // 顶部留白对齐原 SliverPadding(top)
-    children.add(SizedBox(height: CourseController.listPaddingTop));
 
     for (int i = 0; i < controller.types.length; i++) {
       final String typeName = controller.types[i];

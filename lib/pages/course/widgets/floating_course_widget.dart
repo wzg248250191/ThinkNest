@@ -21,9 +21,13 @@ class FloatingCourseWidget extends StatelessWidget {
         if (isRunning && activeId != null) {
           final Color base = CustomAppColors.primary;
           final Color shadowColor = Colors.black.withValues(alpha: 0.16);
+          final double appBarHeight = 160.h;
+          final double bubbleHeight = 66.h + 9.h * 2;
+          final double textVisualOffsetY = 2.h;
+          final double top = ((appBarHeight - bubbleHeight) / 2).clamp(0.0, double.infinity);
 
           return Positioned(
-            top: 18.h,
+            top: top,
             left: 0,
             right: 0,
             child: Center(
@@ -41,8 +45,8 @@ class FloatingCourseWidget extends StatelessWidget {
                     (states) => Colors.white.withValues(alpha: 0.10),
                   ),
                   child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                    constraints: BoxConstraints(maxWidth: 420.w),
+                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 9.h),
+                    constraints: BoxConstraints(maxWidth: 450.w),
                     decoration: BoxDecoration(
                       color: base.withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(999.r),
@@ -59,21 +63,40 @@ class FloatingCourseWidget extends StatelessWidget {
                       _buildCourseIcon(activeId),
                       SizedBox(width: 10.w),
                       ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: 260.w),
-                        child: Text(
-                          activeId,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22.sp,
-                            fontWeight: FontWeight.w600,
-                            height: 1.05,
+                        constraints: BoxConstraints(maxWidth: 360.w),
+                        child: Transform.translate(
+                          offset: Offset(0, textVisualOffsetY),
+                          child: Text(
+                            activeId,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textHeightBehavior: const TextHeightBehavior(
+                              applyHeightToFirstAscent: false,
+                              applyHeightToLastDescent: false,
+                            ),
+                            strutStyle: StrutStyle(
+                              fontSize: 36.sp,
+                              height: 1.0,
+                              forceStrutHeight: true,
+                            ),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 36.sp,
+                              fontWeight: FontWeight.w600,
+                              height: 1.0,
+                            ),
                           ),
                         ),
                       ),
-                      SizedBox(width: 8.w),
-                      Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: 0.90), size: 20.sp),
+                      const Spacer(),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white.withValues(alpha: 0.90),
+                          size: 66.sp,
+                        ),
+                      ),
                     ].toRow(crossAxisAlignment: CrossAxisAlignment.center),
                   ),
                 ),
@@ -99,8 +122,8 @@ class FloatingCourseWidget extends StatelessWidget {
     ];
 
     return Container(
-      width: 50.w,
-      height: 50.h,
+      width: 60.w,
+      height: 60.h,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12.r),
         color: Colors.white.withValues(alpha: 0.12),
@@ -141,7 +164,7 @@ class FloatingCourseWidget extends StatelessWidget {
     return Icon(
       Icons.menu_book_rounded,
       color: Colors.white.withValues(alpha: 0.92),
-      size: 20.sp,
+      size: 33.sp,
     );
   }
 }

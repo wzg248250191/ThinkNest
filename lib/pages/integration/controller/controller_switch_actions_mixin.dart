@@ -31,10 +31,24 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       return;
     }
 
+    final int switchRemaining = _remainingSwitchCooldownSeconds(type);
+    // 关键逻辑：同一个开关两次切换必须间隔 10 秒，否则弹出倒计时提示并回滚 UI 状态。
+    if (switchRemaining > 0 && desiredOn != current.isOn) {
+      _optimisticallySetIsOn(type, current.isOn);
+      update(kIntegrationUpdateIds);
+      unawaited(_showSwitchCooldownDialog(type));
+      return;
+    }
+
+    final bool isWallOrDesk = type == IntegrationSwitchType.wall || type == IntegrationSwitchType.desk;
+    final SwitchCircleState mainState = _mustSwitchState(IntegrationSwitchType.main);
+    final bool isWallOrDeskDirectOpenFlow = isWallOrDesk && desiredOn && !mainState.enabled;
+
     if (type != IntegrationSwitchType.main) {
       final int remaining = _remainingMainCooldownSeconds();
       // 冷却期仅限制“开启子开关”，关闭不应被拦截，避免用户无法紧急关断设备。
-      if (remaining > 0 && desiredOn) {
+      // 关键逻辑：当总开关处于禁用状态（enabled=false）时，墙面/桌面允许“直接开启”而不受总开关 10 秒冷却期影响。
+      if (remaining > 0 && desiredOn && !isWallOrDeskDirectOpenFlow) {
         if (desiredOn != current.isOn) {
           _optimisticallySetIsOn(type, current.isOn);
           update(kIntegrationUpdateIds);
@@ -45,12 +59,15 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     }
 
     if (type != IntegrationSwitchType.main && desiredOn) {
-      final SwitchCircleState mainState = _mustSwitchState(IntegrationSwitchType.main);
       if (!mainState.isOn) {
-        _optimisticallySetIsOn(type, false);
-        update(kIntegrationUpdateIds);
-        ToastUtils.show('请先开启总开关');
-        return;
+        if (isWallOrDeskDirectOpenFlow) {
+          // 关键逻辑：总开关禁用时（禁用态即关闭态），墙面/桌面允许直接开启，不走“先开总开关”的限制链路。
+        } else {
+          _optimisticallySetIsOn(type, false);
+          update(kIntegrationUpdateIds);
+          ToastUtils.show('请先开启总开关');
+          return;
+        }
       }
     }
 
@@ -391,6 +408,8 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     }
 
     _busy[type] = true;
+    // 关键逻辑：同一开关操作进入下发阶段即开始计时，10 秒内禁止再次切换，避免频繁指令导致设备/状态抖动。
+    _markSwitchOperated(type);
     try {
       await executeSwitchCommand(
         type,

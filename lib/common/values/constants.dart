@@ -2,6 +2,12 @@
 class Constants {
   /// 服务 api 基础地址
   static const String apiUrl = 'https://api.example.com';
+
+  /// App 文件存储父目录名称
+  ///
+  /// 说明：
+  /// - 用于统一管理日志、设备配置导入导出等文件
+  static const String appFilesRootDirName = 'think_nest_files';
 }
 
 /// 本地存储 Key 统一常量

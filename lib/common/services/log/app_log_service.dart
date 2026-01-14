@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:get/get.dart';
+import '../../values/constants.dart';
 
 enum AppLogType {
   print,
@@ -42,7 +43,17 @@ class AppLogService extends GetxService {
     _initialized = true;
     try {
       final dir = await getApplicationDocumentsDirectory();
-      _logDir = Directory('${dir.path}${Platform.pathSeparator}logs');
+      final baseDir =
+          Directory('${dir.path}${Platform.pathSeparator}${Constants.appFilesRootDirName}');
+      if (!await baseDir.exists()) {
+        await baseDir.create(recursive: true);
+      }
+
+      final newLogDir = Directory('${baseDir.path}${Platform.pathSeparator}logs');
+      final oldLogDir = Directory('${dir.path}${Platform.pathSeparator}logs');
+      await _migrateLegacyDirIfNeeded(oldDir: oldLogDir, newDir: newLogDir);
+
+      _logDir = newLogDir;
       if (!await _logDir!.exists()) {
         await _logDir!.create(recursive: true);
       }
@@ -53,6 +64,55 @@ class AppLogService extends GetxService {
       _initialized = false;
     }
     return this;
+  }
+
+  /// 迁移旧目录到新目录（旧存在且新不存在时）
+  ///
+  /// 说明：
+  /// - 优先使用 rename（同盘移动更快）
+  /// - rename 失败时，退化为递归拷贝并尝试删除旧目录
+  Future<void> _migrateLegacyDirIfNeeded({
+    required Directory oldDir,
+    required Directory newDir,
+  }) async {
+    final oldExists = await oldDir.exists();
+    final newExists = await newDir.exists();
+    if (!oldExists || newExists) {
+      return;
+    }
+
+    try {
+      await oldDir.rename(newDir.path);
+      return;
+    } catch (_) {}
+
+    try {
+      await newDir.create(recursive: true);
+      await _copyDirectory(oldDir, newDir);
+      await oldDir.delete(recursive: true);
+    } catch (_) {}
+  }
+
+  /// 递归拷贝目录（用于目录迁移兜底）
+  Future<void> _copyDirectory(Directory src, Directory dest) async {
+    await for (final entity in src.list(recursive: false, followLinks: false)) {
+      final name = entity.uri.pathSegments.isNotEmpty ? entity.uri.pathSegments.last : '';
+      if (name.isEmpty) continue;
+      final newPath = '${dest.path}${Platform.pathSeparator}$name';
+      if (entity is File) {
+        try {
+          await entity.copy(newPath);
+        } catch (_) {}
+        continue;
+      }
+      if (entity is Directory) {
+        final nextDest = Directory(newPath);
+        if (!await nextDest.exists()) {
+          await nextDest.create(recursive: true);
+        }
+        await _copyDirectory(entity, nextDest);
+      }
+    }
   }
 
   /// 记录一条“打印日志”，用于承接 print/debugPrint 与业务日志

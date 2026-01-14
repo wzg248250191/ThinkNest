@@ -4,10 +4,16 @@
 // - 该文件仅负责聚合 import 与 part 列表，本身不直接承载业务实现代码
 // - 具体实现分散在多个 part 文件中（枚举/设备配置/分页切换/开关逻辑/最终 Controller 组装）
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:ducafe_ui_core/ducafe_ui_core.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import '../index.dart';
 import '/common/index.dart';
 

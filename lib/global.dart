@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:media_store_plus/media_store_plus.dart';
 
 import 'common/index.dart';
 
@@ -29,6 +32,17 @@ class Global {
     // 关键：优先初始化日志落盘，确保启动阶段的错误/打印也能被记录
     final logService = Get.put(AppLogService(), permanent: true);
     await logService.init();
+
+    if (Platform.isAndroid) {
+      try {
+        // 关键：Android 公共 Downloads 写入依赖 MediaStore 初始化与 appFolder 设置
+        await MediaStore.ensureInitialized();
+        MediaStore.appFolder = 'ThinkNest';
+      } catch (e, s) {
+        // 关键：初始化失败不应阻塞启动，记录错误便于排查
+        AppLogService.tryRecordError(e, s, tag: 'media_store_init');
+      }
+    }
 
     // 注册Socket服务（永久单例）
     Get.put(SocketService(), permanent: true);

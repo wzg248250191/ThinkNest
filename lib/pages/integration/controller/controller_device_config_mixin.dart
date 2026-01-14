@@ -10,6 +10,7 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
   Map<String, DeviceInfoConfig> get deviceConfigs;
 
   String? _deviceConfigsExportsDirPathCache;
+  bool _androidMediaStoreReady = false;
 
   /// 同步一体化页面各开关的 `enabled` 状态
   ///
@@ -89,11 +90,18 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
   /// 导出当前设备配置为 CSV 文件
   ///
   /// 说明：
-  /// - 文件会写入应用文档目录下的 exports 子目录，便于通过文件管理器拷贝/分享
+  /// - Android：写入公共 Downloads/ThinkNest/device_configs/exports（用户更易找到）
+  /// - 其他平台：写入应用文档目录 exports 子目录
   Future<void> exportDeviceConfigsCsv() async {
     try {
       final csv = _deviceConfigsToCsv();
-      final File file = await _writeDeviceConfigsCsvToExportsDir(csv);
+      if (Platform.isAndroid) {
+        final String savedPath = await _saveDeviceConfigsCsvToAndroidDownloads(csv);
+        ToastUtils.show('已导出到：$savedPath');
+        return;
+      }
+
+      final File file = await _writeDeviceConfigsCsvToPrivateExportsDir(csv);
       ToastUtils.show('已导出到：${file.path}');
     } catch (e, s) {
       // 关键：导出失败通常是路径/权限/IO 异常，需要记录便于现场排查
@@ -108,7 +116,12 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     if (cached != null && cached.isNotEmpty) {
       return cached;
     }
-    final dir = await _deviceConfigsExportsDir();
+    if (Platform.isAndroid) {
+      final path = _androidPublicDeviceConfigsExportsDirDisplayPath();
+      _deviceConfigsExportsDirPathCache = path;
+      return path;
+    }
+    final dir = await _deviceConfigsPrivateExportsDir();
     _deviceConfigsExportsDirPathCache = dir.path;
     return dir.path;
   }
@@ -155,6 +168,12 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     if (!ok) return;
 
     try {
+      if (Platform.isAndroid) {
+        // 关键：Android 11+ 在部分系统（如荣耀）上，传统文件选择器体验不稳定；优先走系统“目录授权 + 列表选择文件”流程。
+        final bool handled = await _tryImportDeviceConfigsCsvFromAndroidDownloads();
+        if (handled) return;
+      }
+
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: <String>['csv', 'txt'],
@@ -170,6 +189,110 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
       // 关键：导入失败最常见原因是 CSV 格式不合法或列缺失，记录错误便于定位
       AppLogService.tryRecordError(e, s, tag: 'device_config_import_csv');
       ToastUtils.show('导入失败：请检查 CSV 格式');
+    }
+  }
+
+  /// Android：从 Downloads/ThinkNest/device_configs/exports 通过系统目录授权导入 CSV
+  ///
+  /// 返回值：
+  /// - true：已处理（包含“用户取消/无文件”等情况）
+  /// - false：未处理（回退到 FilePicker 流程）
+  Future<bool> _tryImportDeviceConfigsCsvFromAndroidDownloads() async {
+    if (!Platform.isAndroid) return false;
+
+    File? tempFile;
+    try {
+      await _ensureAndroidMediaStoreReady();
+
+      final DocumentTree? tree = await MediaStore().requestForAccess(
+        // 关键：尽量将系统目录选择器定位到 Download/ThinkNest，减少用户查找成本（该参数为实验能力，失败时仍可手动选择）。
+        initialRelativePath: 'Download/ThinkNest',
+      );
+      if (tree == null) {
+        return true;
+      }
+
+      final docs = tree.children
+          .where((d) => !d.isDirectory)
+          .where((d) {
+            final name = (d.name ?? '').toLowerCase().trim();
+            return name.endsWith('.csv') || name.endsWith('.txt');
+          })
+          .toList(growable: false);
+      if (docs.isEmpty) {
+        ToastUtils.show('该目录没有可导入文件');
+        return true;
+      }
+
+      final Document? picked = await Get.dialog<Document?>(
+        AlertDialog(
+          title: TextWidget.label('选择要导入的文件', fontSize: 28.sp),
+          content: SizedBox(
+            width: 1400.w,
+            child: SingleChildScrollView(
+              child: <Widget>[
+                for (final d in docs)
+                  TextButton(
+                    onPressed: () => Get.back<Document?>(result: d),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextWidget.label(
+                        d.name ?? '(未命名文件)',
+                        fontSize: 24.sp,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+              ].toColumn(crossAxisAlignment: CrossAxisAlignment.stretch),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back<Document?>(),
+              child: TextWidget.label('取消', fontSize: 24.sp),
+            ),
+          ],
+        ),
+        barrierDismissible: true,
+      );
+      if (picked == null) {
+        return true;
+      }
+
+      final String tempPath =
+          '${Directory.systemTemp.path}${Platform.pathSeparator}${picked.name ?? 'import_device_configs.csv'}';
+      tempFile = File(tempPath);
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+
+      final bool ok = await MediaStore().readFileUsingUri(
+        uriString: picked.uriString,
+        tempFilePath: tempFile.path,
+      );
+      if (!ok) {
+        ToastUtils.show('读取文件失败');
+        return true;
+      }
+
+      final String csv = await tempFile.readAsString();
+      final int updated = await _applyDeviceConfigsFromCsv(csv);
+      ToastUtils.show('已导入：$updated 项');
+      return true;
+    } catch (e, s) {
+      // 关键：SAF/MediaStore 的目录授权流程在不同机型上差异较大，失败时必须回退到 FilePicker，保证可用性。
+      AppLogService.tryRecordError(e, s, tag: 'device_config_import_android_downloads');
+      return false;
+    } finally {
+      try {
+        final f = tempFile;
+        if (f != null && await f.exists()) {
+          await f.delete();
+        }
+      } catch (_) {}
     }
   }
 
@@ -276,16 +399,59 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     return updated;
   }
 
-  /// 将 CSV 文本写入应用 exports 目录并返回文件对象
-  Future<File> _writeDeviceConfigsCsvToExportsDir(String csv) async {
-    final exportsDir = await _deviceConfigsExportsDir();
+  /// 将 CSV 文本写入应用私有 exports 目录并返回文件对象
+  Future<File> _writeDeviceConfigsCsvToPrivateExportsDir(String csv) async {
+    final exportsDir = await _deviceConfigsPrivateExportsDir();
     final ts = DateTime.now();
-    final fileName =
-        'device_configs_${ts.year}${_two(ts.month)}${_two(ts.day)}_${_two(ts.hour)}${_two(ts.minute)}${_two(ts.second)}.csv';
+    final fileName = _deviceConfigsExportFileName(ts);
     final file = File('${exportsDir.path}${Platform.pathSeparator}$fileName');
     final bytes = _csvUtf8BomBytes(csv);
     await file.writeAsBytes(bytes, flush: true);
     return file;
+  }
+
+  /// 将 CSV 导出到 Android 公共 Downloads/ThinkNest 下，并返回展示用路径
+  Future<String> _saveDeviceConfigsCsvToAndroidDownloads(String csv) async {
+    await _ensureAndroidMediaStoreReady();
+    final ts = DateTime.now();
+    final fileName = _deviceConfigsExportFileName(ts);
+    final tempFile = File('${Directory.systemTemp.path}${Platform.pathSeparator}$fileName');
+    try {
+      final bytes = _csvUtf8BomBytes(csv);
+      await tempFile.writeAsBytes(bytes, flush: true);
+
+      final SaveInfo? info = await MediaStore().saveFile(
+        tempFilePath: tempFile.path,
+        dirType: DirType.download,
+        dirName: DirName.download,
+        relativePath: _androidDeviceConfigsExportsRelativePath(),
+      );
+      if (info == null || !info.isSuccessful) {
+        throw StateError('media store save failed: ${info?.name}');
+      }
+      return '${_androidPublicDeviceConfigsExportsDirDisplayPath()}${Platform.pathSeparator}${info.name}';
+    } finally {
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// 确保 Android MediaStore 已初始化并设置 appFolder
+  Future<void> _ensureAndroidMediaStoreReady() async {
+    if (!Platform.isAndroid) return;
+    if (_androidMediaStoreReady) return;
+    // 关键：MediaStore 未初始化或未设置 appFolder 会导致保存失败（AppFolderNotSetException）
+    await MediaStore.ensureInitialized();
+    MediaStore.appFolder = 'ThinkNest';
+    _androidMediaStoreReady = true;
+  }
+
+  /// 构造设备配置导出文件名（包含时间戳）
+  String _deviceConfigsExportFileName(DateTime ts) {
+    return 'device_configs_${ts.year}${_two(ts.month)}${_two(ts.day)}_${_two(ts.hour)}${_two(ts.minute)}${_two(ts.second)}.csv';
   }
 
   /// 将 CSV 文本编码为 UTF-8 BOM 字节数组（提升 Windows Excel 直接打开的中文兼容性）
@@ -300,8 +466,8 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     return csv.replaceAll('\r\n', '\n').replaceAll('\r', '\n').replaceAll('\n', '\r\n');
   }
 
-  /// 获取/创建设备配置 CSV 导出目录
-  Future<Directory> _deviceConfigsExportsDir() async {
+  /// 获取/创建设备配置 CSV 私有导出目录
+  Future<Directory> _deviceConfigsPrivateExportsDir() async {
     final dir = await getApplicationDocumentsDirectory();
     final baseDir =
         Directory('${dir.path}${Platform.pathSeparator}${Constants.appFilesRootDirName}');
@@ -325,6 +491,18 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
       await exportsDir.create(recursive: true);
     }
     return exportsDir;
+  }
+
+  /// 获取 Android 公共 Downloads 下设备配置导出目录展示路径
+  String _androidPublicDeviceConfigsExportsDirDisplayPath() {
+    // 关键：Android 公共目录写入使用 MediaStore 的 relativePath（相对 /storage/emulated/0/Download），展示路径必须与实际落盘一致。
+    return '/storage/emulated/0/Download/${_androidDeviceConfigsExportsRelativePath().replaceAll('/', Platform.pathSeparator)}';
+  }
+
+  /// 获取 Android 公共 Downloads 下设备配置导出相对路径（相对 appFolder）
+  String _androidDeviceConfigsExportsRelativePath() {
+    // 关键：MediaStore 的 relativePath 是相对 /storage/emulated/0/Download 的子路径；需要包含 ThinkNest 目录才能落到 Downloads/ThinkNest 下。
+    return 'ThinkNest/device_configs/exports';
   }
 
   /// 迁移旧目录到新目录（旧存在且新不存在时）

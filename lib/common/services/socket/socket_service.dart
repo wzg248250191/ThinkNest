@@ -14,6 +14,7 @@
 library socket_service;
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import '../../index.dart';
 
@@ -39,14 +40,22 @@ class _ServerEndpointState {
   final StreamController<MESSAGE> messageController;
 
   bool hasRequestedCourseListInCurrentConnection = false;
+  bool foregroundAutoRecoverEnabled = true;
 
   OperationStatus? lastStatusShown;
   int lastStatusShownMs = 0;
+
+  int lastConnectedMs = 0;
+  int lastMessageReceivedMs = 0;
+  int lastHealthRecoverTriggeredMs = 0;
 }
 
 /// Socket服务（GetX Service）
 /// 支持同时连接墙面服务器和桌面服务器
-abstract class SocketServiceBase extends GetxService {
+///
+/// 说明：
+/// - 通过 [WidgetsBindingObserver] 监听应用前后台切换，用于唤醒后快速恢复连接
+abstract class SocketServiceBase extends GetxService with WidgetsBindingObserver {
   /// Socket客户端管理器
   late SocketClientManager _clientManager;
   

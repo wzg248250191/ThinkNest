@@ -59,6 +59,11 @@ class Storage {
     return _prefs.getBool(key) ?? false;
   }
 
+  /// 判断本地存储中是否存在指定 key
+  bool containsKey(String key) {
+    return _prefs.containsKey(key);
+  }
+
   int getInt(String key, {int defaultValue = 0}) {
     return _prefs.getInt(key) ?? defaultValue;
   }

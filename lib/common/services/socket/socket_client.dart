@@ -22,7 +22,12 @@ enum SocketState {
 /// Socket客户端
 class SocketClient {
   /// 创建 Socket 客户端并配置自动重连策略
-  SocketClient({this.maxReconnectAttempts = 20});
+  SocketClient({
+    this.clientName = '未知端',
+    this.maxReconnectAttempts = 5,
+  });
+
+  final String clientName;
 
   /// Socket实例
   Socket? _socket;
@@ -65,7 +70,7 @@ class SocketClient {
   /// 最大重连次数（null 表示不设上限）
   ///
   /// 说明：
-  /// - 默认设置为 20：避免断线后后台长期重连造成耗电/耗网/刷日志
+  /// - 默认设置为 5：按 3→6→12→24→30s 的指数退避尝试后停止，避免断线后后台长期重连造成耗电/耗网/刷日志
   /// - 如需“始终在线”场景，可在创建 client 时传 null
   final int? maxReconnectAttempts;
   
@@ -83,6 +88,9 @@ class SocketClient {
 
   /// 防止异步调度重连时出现“旧任务覆盖新任务”的竞态
   int _reconnectScheduleToken = 0;
+
+  // 关键逻辑：标记当前一次 _doConnect 是否来自“底层自动重连”，用于输出“底层重连->尝试连接/连接结果”日志。
+  bool _autoReconnectAttemptInProgress = false;
 
   /// 获取当前连接状态
   SocketState get state => _state;
@@ -102,6 +110,8 @@ class SocketClient {
     bool autoReconnect = true,
     Duration? timeout,
   }) async {
+    // 关键逻辑：业务侧主动 connect 不应被当作“底层重连”，避免日志来源混淆。
+    _autoReconnectAttemptInProgress = false;
     if (isConnected) {
       final bool sameEndpoint = _host == host && _port == port;
       if (sameEndpoint) {
@@ -144,6 +154,8 @@ class SocketClient {
     if (_state == SocketState.connecting) {
       return false;
     }
+    // 关键逻辑：业务侧主动 reconnect 属于“单次尝试”，不应输出“底层重连”日志。
+    _autoReconnectAttemptInProgress = false;
     _isManualDisconnect = false;
     // 关键逻辑：仅做一次重连尝试，避免在业务侧未要求时后台无限重连造成耗电/耗网。
     _autoReconnectEnabled = false;
@@ -168,6 +180,9 @@ class SocketClient {
   /// - 负责真正的 Socket.connect 与数据监听注册
   /// - 连接失败时会按重连策略自动重试（非主动断开情况下）
   Future<bool> _doConnect({Duration? timeout}) async {
+    final bool isAutoReconnectAttempt = _autoReconnectAttemptInProgress;
+    // 关键逻辑：每次 _doConnect 只消费一次该标记，避免后续业务侧 connect/reconnect 误继承为“底层重连”。
+    _autoReconnectAttemptInProgress = false;
     try {
       _updateState(SocketState.connecting);     
       _socket = await Socket.connect(
@@ -177,6 +192,12 @@ class SocketClient {
       );
 
       DebugUtils.log('Socket连接成功: ${_socket?.remoteAddress.address}:${_socket?.remotePort}', name: 'socket');
+      if (isAutoReconnectAttempt) {
+        DebugUtils.log(
+          '底层重连->连接结果|$clientName|成功',
+          name: 'socket',
+        );
+      }
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
       
@@ -199,6 +220,12 @@ class SocketClient {
      // DebugUtils.log('Socket连接失败: $e', name: 'socket');
       _updateState(SocketState.failed);
       onError?.call('连接失败: $e');
+      if (isAutoReconnectAttempt) {
+        DebugUtils.log(
+          '底层重连->连接结果|$clientName|失败',
+          name: 'socket',
+        );
+      }
       
       // 尝试重连
       if (!_isManualDisconnect && _autoReconnectEnabled) {
@@ -481,16 +508,22 @@ class SocketClient {
     if (sameLan == false) {
       // 关键逻辑：检测到已切换到不同局域网时，停止对旧 IP 的自动重连，避免后台持续重连造成耗电/耗网。
       DebugUtils.log('检测到网络已切换，停止自动重连: $host:$port', name: 'socket');
+      DebugUtils.log(
+        '底层重连->连接结果|$clientName|停止',
+        name: 'socket',
+      );
       _autoReconnectEnabled = false;
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
       return;
     }
 
-    _reconnectAttempts++;
     if (maxReconnectAttempts != null && _reconnectAttempts >= maxReconnectAttempts!) {
-      // 关键逻辑：达到上限后关闭自动重连，避免断线回调重复触发重连调度导致持续刷日志。
-      DebugUtils.log('已达到最大重连次数，停止重连', name: 'socket');
+      // 关键逻辑：产品要求仅做有限次自动重连（默认 5 次：3→6→12→24→30s），避免后台长期重连造成耗电/耗网/刷日志。
+      DebugUtils.log(
+        '底层重连->连接结果|$clientName|停止',
+        name: 'socket',
+      );
       _autoReconnectEnabled = false;
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
@@ -498,10 +531,11 @@ class SocketClient {
       return;
     }
 
+    _reconnectAttempts++;
+
     // 关键逻辑：PC 服务器可能在系统自启动阶段较晚可用，采用指数退避持续重试，避免固定次数后放弃导致“永远连不上”。
     final int backoffFactor = 1 << ((_reconnectAttempts - 1).clamp(0, 4));
     final int nextIntervalSeconds = (reconnectInterval * backoffFactor).clamp(3, 30);
-    DebugUtils.log('将在$nextIntervalSeconds秒后进行第$_reconnectAttempts次重连...', name: 'socket');
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: nextIntervalSeconds), () {
@@ -509,7 +543,12 @@ class SocketClient {
       if (_state == SocketState.connected || _socket != null || !_autoReconnectEnabled) {
         return;
       }
-      DebugUtils.log('开始第$_reconnectAttempts次重连...', name: 'socket');
+      DebugUtils.log(
+        '底层重连->尝试连接|$clientName',
+        name: 'socket',
+      );
+      // 关键逻辑：标记本次 _doConnect 为“底层自动重连”，用于输出对应的连接结果日志。
+      _autoReconnectAttemptInProgress = true;
       _doConnect();
     });
   }

@@ -355,7 +355,7 @@ class SingleCourseController extends GetxController {
     return true;
   }
 
-  /// 课程详情页控制开关点击时的后台连接尝试（历史 IP 一次 + UDP 一次）
+  /// 课程详情页控制开关点击时的后台连接尝试（reconnect 一次 + 历史 IP 直连 2 次，不做 UDP 兜底）
   ///
   /// 说明：
   /// - 用户操作当下直接提示“未连接”（等价于本次操作失败）
@@ -370,11 +370,10 @@ class SingleCourseController extends GetxController {
       if (!shouldContinue() || _socketService.isConnected(serverType)) {
         return;
       }
-      // 关键逻辑：点击触发时只做一次连接尝试（历史 IP 一次 + UDP 一次），避免后台持续重连造成耗电/耗网。
+      // 关键逻辑：点击触发时仅做 reconnect 一次 + 历史 IP 直连 2 次；无历史 IP 或不在同一局域网则直接返回。
       await _socketService.connectOncePreferLastEndpointThenUdp(
         serverType,
         connectTimeout: const Duration(seconds: 2),
-        udpTimeout: const Duration(seconds: 2),
       );
     }());
   }

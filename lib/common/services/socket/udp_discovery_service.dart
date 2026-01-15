@@ -53,7 +53,6 @@ class UdpDiscoveryService {
     int retryCount = 3,
   }) async {
     if (_isScanning) {
-      DebugUtils.log('UDP发现服务正在扫描中...', name: 'socket');
       return _discoveredServers;
     }
 
@@ -68,13 +67,10 @@ class UdpDiscoveryService {
       _discoveryDoneCompleter = Completer<void>();
       _localIpv4Prefixes = await _computeLocalIpv4CClassPrefixes();
       
-      DebugUtils.log('UDP发现服务已启动，本地端口: ${_socket!.port}', name: 'socket');
-      
       // 监听响应
       _socket!.listen(
         _onDataReceived,
         onError: (error) {
-          DebugUtils.log('UDP接收错误: $error', name: 'socket');
           onError?.call('UDP接收错误: $error');
         },
       );
@@ -90,7 +86,6 @@ class UdpDiscoveryService {
       await _discoveryDoneCompleter!.future;
       
     } catch (e) {
-      DebugUtils.log('UDP发现服务错误: $e', name: 'socket');
       final String msg = e.toString();
       if (msg.contains('Operation not permitted') || msg.contains('operation not permitted')) {
         // 关键逻辑：Release 包在 Android 未声明 INTERNET 时，创建 UDP Socket 会直接被系统拒绝（EPERM），给出明确指引便于定位。
@@ -137,19 +132,17 @@ class UdpDiscoveryService {
       final data = message.writeToBuffer();
       
       // 发送广播
-      final sent = _socket!.send(
+      _socket!.send(
         data,
         InternetAddress(broadcastAddress),
         udpEchoPort,
       );
       
-      DebugUtils.log('已发送UDP发现请求，字节数: $sent', name: 'socket');
-      
       // 同时尝试发送到常见网段
       _sendToCommonSubnets(data);
       
     } catch (e) {
-      DebugUtils.log('发送UDP发现请求失败: $e', name: 'socket');
+      // ignore
     }
   }
 
@@ -281,12 +274,11 @@ class UdpDiscoveryService {
         );
 
         _discoveredServers.add(server);
-        DebugUtils.log('发现服务器: $server', name: 'socket');
         onServerDiscovered?.call(server);
         _tryCompleteDiscoveryEarly();
       }
     } catch (e) {
-      DebugUtils.log('解析UDP响应失败: $e', name: 'socket');
+      // ignore
     }
   }
 
@@ -304,7 +296,6 @@ class UdpDiscoveryService {
     _isScanning = false;
     _socket?.close();
     _socket = null;
-    DebugUtils.log('UDP发现服务已停止', name: 'socket');
   }
 
   /// 手动停止扫描

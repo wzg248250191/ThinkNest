@@ -14,6 +14,9 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
   /// 按标题获取设备配置（由设备配置 mixin 或宿主类提供）
   DeviceInfoConfig getDeviceConfig(String title);
 
+  /// 墙面/桌面开关的“连接等待会话”序号（用于取消自身连接策略，不影响其它连接/重连逻辑）
+  final Map<IntegrationSwitchType, int> _switchConnectSessionToken = <IntegrationSwitchType, int>{};
+
   /// UI 回调：当某个开关状态改变时触发
   void onSwitchStateChanged(IntegrationSwitchType type, SwitchCircleState value) {
     unawaited(requestSwitchChange(type, value.isOn));
@@ -273,18 +276,14 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
   /// 停止墙面/桌面对应 Socket 的自动重连
   ///
   /// 说明：
-  /// - 用于“开关关闭”或“等待窗口超时”等场景，确保不会继续后台打印“第 N 次重连”并消耗网络/电量
+  /// - 用于“开关关闭”或“等待窗口超时”等场景，仅取消“一体化开关自身”的连接等待循环
+  /// - 不影响前台健康检查、锁屏/休眠唤醒恢复、课程详情等其它连接/重连入口
   void _stopSocketReconnectForSwitch(IntegrationSwitchType type) {
-    final ServerType? serverType = _serverTypeForSwitch(type);
-    if (serverType == null) {
+    if (_serverTypeForSwitch(type) == null) {
       return;
     }
-    if (!Get.isRegistered<SocketService>()) {
-      return;
-    }
-    final SocketService socketService = Get.find<SocketService>();
-    // 关键逻辑：关闭开关时仅停止自动重连，不主动断开现有连接，避免影响其它依赖同一连接的业务链路。
-    socketService.clientManager.setAutoReconnectEnabled(serverType, false);
+    // 关键逻辑：通过递增 token 取消当前/历史连接等待循环，避免关闭后仍继续重试连接。
+    _switchConnectSessionToken[type] = (_switchConnectSessionToken[type] ?? 0) + 1;
   }
 
   /// 开启墙面/桌面后，等待 PC 服务端自启完成并尝试连接对应服务器
@@ -293,7 +292,7 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
   /// - 使用 SocketService.ensureConnected：先判断已连接 → 再尝试历史 IP 直连 → 失败再 UDP 扫描兜底
   /// - 等待窗口仅在开关打开后的 5 分钟内有效，超时后不再后台尝试连接（避免长期占用网络/电量）
   /// - 若等待/重试期间用户把开关关闭，会停止继续尝试
-  Future<void> _ensureServerConnectedForSwitch(IntegrationSwitchType type) async {
+  Future<void> _ensureServerConnectedForSwitch(IntegrationSwitchType type, int sessionToken) async {
     final ServerType? serverType = _serverTypeForSwitch(type);
     if (serverType == null) {
       return;
@@ -311,20 +310,27 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     }
 
     final SocketService socketService = Get.find<SocketService>();
-    // 关键逻辑：由“开关等待循环”控制重试节奏，避免底层 SocketClient 单独进入无限自动重连。
-    socketService.clientManager.setAutoReconnectEnabled(serverType, false);
+    // 关键逻辑：已连接时无需进入“等待窗口/重试循环”，也不输出“尝试连接”相关日志，避免误导为又发起连接。
+    if (socketService.isConnected(serverType)) {
+      return;
+    }
     // 关键逻辑：开关打开后 5 分钟内使用“固定短间隔 + 固定 UDP 超时”尝试连接；
     // 超过窗口则停止尝试，避免用户离开场地/设备未开时长期后台重试造成网络/电量消耗。
     final DateTime deadline = DateTime.now().add(const Duration(minutes: 5));
     const Duration delay = Duration(seconds: 2);
     const Duration udpTimeout = Duration(seconds: 3);
+    const Duration udpScanInterval = Duration(seconds: 30);
+    DateTime lastUdpScanAt = DateTime.fromMillisecondsSinceEpoch(0);
 
     DebugUtils.log(
-      '开关开始尝试连接|${type.displayName}|${serverType.displayName}',
+      '${serverType.displayName}开关->尝试连接',
       name: 'socket',
     );
 
     while (true) {
+      if (_switchConnectSessionToken[type] != sessionToken) {
+        return;
+      }
       if (!_mustSwitchState(type).isOn) {
         DebugUtils.log(
           '开关连接结果|${type.displayName}|${serverType.displayName}|失败',
@@ -351,13 +357,25 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
 
       bool ok = false;
       try {
+        final DateTime now = DateTime.now();
+        // 关键逻辑：桌面/墙面服务器未开启时，开关触发的“等待窗口重试”会频繁调用 ensureConnected；
+        // 若每次都允许 UDP 兜底，会持续广播 discover，导致服务器一开机就被刷屏（反复响应 discover）。
+        // 这里对 UDP 兜底做节流：大多数重试只走“reconnect/历史 IP 直连”，每隔一段时间才允许一次 UDP 扫描。
+        final bool allowUdpFallback = now.difference(lastUdpScanAt) >= udpScanInterval;
+        if (allowUdpFallback) {
+          lastUdpScanAt = now;
+        }
         ok = await socketService
             .ensureConnected(
               serverType,
               autoReconnect: false,
+              udpFallback: allowUdpFallback,
+              preferReconnect: true,
+              lastEndpointAttempts: 2,
+              connectTimeout: const Duration(seconds: 2),
               udpTimeout: udpTimeout,
               priority: 1,
-              source: 'integration_switch',
+              source: '${serverType.displayName}开关',
             )
             .timeout(
               udpTimeout + const Duration(seconds: 5),
@@ -368,6 +386,9 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       } catch (e) {
         ok = false;
       }
+      if (_switchConnectSessionToken[type] != sessionToken) {
+        return;
+      }
       final bool connectedNow = socketService.isConnected(serverType);
       if (ok && connectedNow) {
         DebugUtils.log(
@@ -377,8 +398,6 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
         return;
       }
 
-      // 关键逻辑：ensureConnected 内部可能打开了底层自动重连，这里立即关闭，避免后台继续重连。
-      socketService.clientManager.setAutoReconnectEnabled(serverType, false);
       await Future.delayed(delay);
     }
   }
@@ -425,7 +444,9 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
     if (desiredOn) {
       // 关键逻辑：不依赖“开机卡/硬件指令是否成功”，只要用户希望开启且服务器未连接，就进入 5 分钟连接等待。
       // 目的：覆盖“首次网络未就绪/硬件指令偶发失败，但 PC 服务端稍后自启完成”的场景，提升首次连接成功率。
-      unawaited(_ensureServerConnectedForSwitch(type));
+      final int sessionToken = (_switchConnectSessionToken[type] ?? 0) + 1;
+      _switchConnectSessionToken[type] = sessionToken;
+      unawaited(_ensureServerConnectedForSwitch(type, sessionToken));
     }
 
     final bool? pending = _pendingDesired[type];

@@ -16,6 +16,7 @@ import 'common/index.dart';
 /// - 先确保 Flutter 引擎/插件绑定完成，再进行全局初始化
 /// - 在 runApp 前完成横屏锁定与沉浸式/状态栏样式配置，避免首帧 UI 抖动
 Future<void> main() async {
+  DebugUtils.log("------------程序启动------------", name: 'global');
   runZonedGuarded(
     () async {
       // 关键：确保绑定初始化与 runApp 在同一个 Zone 内，避免 Zone mismatch

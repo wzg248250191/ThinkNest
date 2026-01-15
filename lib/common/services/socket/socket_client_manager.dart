@@ -33,8 +33,8 @@ class SocketClientManager {
 
   /// 初始化客户端
   void _initClients() {
-    _wallClient = SocketClient();
-    _desktopClient = SocketClient();
+    _wallClient = SocketClient(clientName: '墙面');
+    _desktopClient = SocketClient(clientName: '桌面');
     
     // 设置墙面服务器回调
     _wallClient.onMessageReceived = (message) {

@@ -197,9 +197,11 @@ class LogsController extends GetxController {
 
   /// 导出当天日志到本地文件
   Future<void> exportDay() async {
+    final bool hasLogs = await AppLogService.instance.hasDayLogs(selectedDay);
     final file = await AppLogService.instance.exportDay(selectedDay);
     if (file == null) {
-      ToastUtils.show('当天无日志可导出');
+      // 关键：导出失败与“当天无日志”需要区分提示；避免出现文件已导出但提示无日志的误导。
+      ToastUtils.show(hasLogs ? '导出失败' : '当天无日志可导出');
       return;
     }
     ToastUtils.show('已导出到：${file.path}');

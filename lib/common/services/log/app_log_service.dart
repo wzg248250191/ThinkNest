@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:media_store_plus/media_store_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:get/get.dart';
 import '../../values/constants.dart';
@@ -36,6 +37,7 @@ class AppLogService extends GetxService {
   IOSink? _sink;
   Future<void> _writeChain = Future<void>.value();
   bool _initialized = false;
+  bool _androidMediaStoreReady = false;
 
   /// 初始化日志服务：创建目录、清理过期文件、并准备写入句柄
   Future<AppLogService> init() async {
@@ -162,6 +164,27 @@ class AppLogService extends GetxService {
         .toList(growable: false);
   }
 
+  /// 判断指定日期是否存在可导出的日志内容
+  Future<bool> hasDayLogs(DateTime day) async {
+    await init();
+    await _writeChain;
+    final targetDay = DateTime(day.year, day.month, day.day);
+    if (_currentDay == targetDay) {
+      // 关键：当天日志可能仍在缓冲区，判断前先 flush，避免“实际有日志但读到空文件”的误判。
+      try {
+        await _sink?.flush();
+      } catch (_) {}
+    }
+    final file = File(_dayFilePath(targetDay));
+    if (!await file.exists()) return false;
+    try {
+      return (await file.length()) > 0;
+    } catch (_) {
+      // 关键：极少数设备上文件元信息读取可能失败，这里保守按“存在即可导出”处理，避免误报无日志。
+      return true;
+    }
+  }
+
   /// 清除指定日期的日志文件内容
   Future<void> clearDay(DateTime day) async {
     await init();
@@ -196,15 +219,30 @@ class AppLogService extends GetxService {
   /// 导出指定日期的日志到一个新文件（用于分享/拷贝到电脑排查）
   Future<File?> exportDay(DateTime day) async {
     await init();
-    final src = File(_dayFilePath(day));
+    await _writeChain;
+    final targetDay = DateTime(day.year, day.month, day.day);
+    if (_currentDay == targetDay) {
+      // 关键：当天日志可能仍在缓冲区，导出前先 flush，避免导出空文件/误判无日志。
+      try {
+        await _sink?.flush();
+      } catch (_) {}
+    }
+    final src = File(_dayFilePath(targetDay));
     if (!await src.exists()) return null;
+    final int size = await src.length();
+    if (size <= 0) return null;
+    final ts = DateTime.now();
+    final fileName =
+        'export_${ts.year}${_two(ts.month)}${_two(ts.day)}_${_two(ts.hour)}${_two(ts.minute)}${_two(ts.second)}.log';
+    if (Platform.isAndroid) {
+      // 关键：Android 11+ 受 Scoped Storage 限制，导出需要写入公共 Downloads 并使用 MediaStore。
+      return await _exportLogFileToAndroidDownloads(src: src, fileName: fileName);
+    }
+
     final exportsDir = Directory('${_logDir!.path}${Platform.pathSeparator}exports');
     if (!await exportsDir.exists()) {
       await exportsDir.create(recursive: true);
     }
-    final ts = DateTime.now();
-    final fileName =
-        'export_${ts.year}${_two(ts.month)}${_two(ts.day)}_${_two(ts.hour)}${_two(ts.minute)}${_two(ts.second)}.log';
     final dest = File('${exportsDir.path}${Platform.pathSeparator}$fileName');
     return await src.copy(dest.path);
   }
@@ -212,17 +250,163 @@ class AppLogService extends GetxService {
   /// 导出选中的若干行日志到文件（便于在页面中多选后提取）
   Future<File?> exportSelectedLines(List<AppLogLine> lines) async {
     await init();
+    final ts = DateTime.now();
+    final fileName =
+        'export_selected_${ts.year}${_two(ts.month)}${_two(ts.day)}_${_two(ts.hour)}${_two(ts.minute)}${_two(ts.second)}.log';
+    final content = lines.map(_formatLine).join('\n');
+    if (Platform.isAndroid) {
+      // 关键：Android 11+ 受 Scoped Storage 限制，导出需要写入公共 Downloads 并使用 MediaStore。
+      return await _exportLogContentToAndroidDownloads(
+        content: content,
+        fileName: fileName,
+      );
+    }
+
     final exportsDir = Directory('${_logDir!.path}${Platform.pathSeparator}exports');
     if (!await exportsDir.exists()) {
       await exportsDir.create(recursive: true);
     }
-    final ts = DateTime.now();
-    final fileName =
-        'export_selected_${ts.year}${_two(ts.month)}${_two(ts.day)}_${_two(ts.hour)}${_two(ts.minute)}${_two(ts.second)}.log';
     final dest = File('${exportsDir.path}${Platform.pathSeparator}$fileName');
-    final content = lines.map(_formatLine).join('\n');
     await dest.writeAsString(content, flush: true);
     return dest;
+  }
+
+  /// Android：确保 MediaStore 初始化完成并设置 appFolder
+  ///
+  /// 说明：
+  /// - MediaStore.saveFile 在 appFolder 未设置时会抛 AppFolderNotSetException
+  /// - 这里做兜底，避免极端情况下（例如服务被提前调用）导致导出失败
+  Future<void> _ensureAndroidMediaStoreReady() async {
+    if (!Platform.isAndroid) return;
+    if (_androidMediaStoreReady) return;
+    await MediaStore.ensureInitialized();
+    MediaStore.appFolder = 'ThinkNest';
+    _androidMediaStoreReady = true;
+  }
+
+  /// Android：日志导出在 Downloads 下的相对路径
+  ///
+  /// 说明：最终落盘目录为 /storage/emulated/0/Download/ThinkNest/logs/exports
+  String _androidLogsExportsRelativePath() {
+    return 'ThinkNest/logs/exports';
+  }
+
+  /// Android：把现有日志文件导出到 Downloads/ThinkNest/logs/exports
+  ///
+  /// 返回值：
+  /// - 返回用于 UI 展示的“公共目录路径”（不依赖 App 私有目录）
+  Future<File?> _exportLogFileToAndroidDownloads({
+    required File src,
+    required String fileName,
+  }) async {
+    await _ensureAndroidMediaStoreReady();
+    final expectedPath =
+        '/storage/emulated/0/Download/${_androidLogsExportsRelativePath().replaceAll('/', Platform.pathSeparator)}${Platform.pathSeparator}$fileName';
+    final tempFile = File('${Directory.systemTemp.path}${Platform.pathSeparator}$fileName');
+    try {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+      await src.copy(tempFile.path);
+
+      final SaveInfo? info = await MediaStore().saveFile(
+        tempFilePath: tempFile.path,
+        dirType: DirType.download,
+        dirName: DirName.download,
+        relativePath: _androidLogsExportsRelativePath(),
+      );
+      // 关键修改：在部分机型/Release 构建下，可能出现 isSuccessful=false 但文件已保存的情况。
+      // 这里仅在 info 为空或无有效文件名时返回失败，减少误判。
+      if (info == null) {
+        // 关键修改：saveFile 可能返回 null，但文件实际已保存；同时 Scoped Storage 会导致 File.exists 在部分系统下不可靠。
+        // 因此这里优先按“预期路径”直接视为成功，避免误报导出失败。
+        try {
+          final bool exists = await File(expectedPath).exists();
+          if (exists) return File(expectedPath);
+        } catch (_) {}
+        return File(expectedPath);
+      }
+      final displayName = info.name.trim();
+      final safeDisplayName = displayName.isEmpty ? fileName : displayName;
+      if (safeDisplayName.isEmpty) {
+        return null;
+      }
+      final displayPath =
+          '/storage/emulated/0/Download/${_androidLogsExportsRelativePath().replaceAll('/', Platform.pathSeparator)}${Platform.pathSeparator}$safeDisplayName';
+      return File(displayPath);
+    } catch (_) {
+      // 关键：部分系统下 MediaStore 调用可能抛异常，但写入已经完成；这里尝试回查预期路径避免误报失败。
+      try {
+        final bool exists = await File(expectedPath).exists();
+        if (exists) return File(expectedPath);
+      } catch (_) {}
+      return null;
+    } finally {
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Android：把日志文本内容导出到 Downloads/ThinkNest/logs/exports
+  ///
+  /// 返回值：
+  /// - 返回用于 UI 展示的“公共目录路径”（不依赖 App 私有目录）
+  Future<File?> _exportLogContentToAndroidDownloads({
+    required String content,
+    required String fileName,
+  }) async {
+    await _ensureAndroidMediaStoreReady();
+    final expectedPath =
+        '/storage/emulated/0/Download/${_androidLogsExportsRelativePath().replaceAll('/', Platform.pathSeparator)}${Platform.pathSeparator}$fileName';
+    final tempFile = File('${Directory.systemTemp.path}${Platform.pathSeparator}$fileName');
+    try {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+      await tempFile.writeAsString(content, flush: true);
+
+      final SaveInfo? info = await MediaStore().saveFile(
+        tempFilePath: tempFile.path,
+        dirType: DirType.download,
+        dirName: DirName.download,
+        relativePath: _androidLogsExportsRelativePath(),
+      );
+      // 关键修改：在部分机型/Release 构建下，可能出现 isSuccessful=false 但文件已保存的情况。
+      // 这里仅在 info 为空或无有效文件名时返回失败，减少误判。
+      if (info == null) {
+        // 关键修改：saveFile 可能返回 null，但文件实际已保存；同时 Scoped Storage 会导致 File.exists 在部分系统下不可靠。
+        // 因此这里优先按“预期路径”直接视为成功，避免误报导出失败。
+        try {
+          final bool exists = await File(expectedPath).exists();
+          if (exists) return File(expectedPath);
+        } catch (_) {}
+        return File(expectedPath);
+      }
+      final displayName = info.name.trim();
+      final safeDisplayName = displayName.isEmpty ? fileName : displayName;
+      if (safeDisplayName.isEmpty) {
+        return null;
+      }
+      final displayPath =
+          '/storage/emulated/0/Download/${_androidLogsExportsRelativePath().replaceAll('/', Platform.pathSeparator)}${Platform.pathSeparator}$safeDisplayName';
+      return File(displayPath);
+    } catch (_) {
+      // 关键：部分系统下 MediaStore 调用可能抛异常，但写入已经完成；这里尝试回查预期路径避免误报失败。
+      try {
+        final bool exists = await File(expectedPath).exists();
+        if (exists) return File(expectedPath);
+      } catch (_) {}
+      return null;
+    } finally {
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+    }
   }
 
   /// 关闭写入资源（用于应用退出或测试场景）

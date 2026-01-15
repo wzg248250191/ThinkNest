@@ -41,28 +41,31 @@ class DeviceConfigView extends GetView<IntegrationController> {
     return <Widget>[
       exportPath,
       SizedBox(width: 16.w),
+      // ButtonWidget.outline(
+      //   '打开',
+      //   width: 140.w,
+      //   height: 56.h,
+      //   fontSize: 26.sp,
+      //   onTap: controller.openDeviceConfigsExportsDir,
+      //   backgroundColor: Colors.white,
+      // ),
+      // SizedBox(width: 16.w),
       ButtonWidget.outline(
-        '打开',
+        '导入',
         width: 140.w,
         height: 56.h,
         fontSize: 26.sp,
-        onTap: controller.openDeviceConfigsExportsDir,
-      ),
-      SizedBox(width: 16.w),
-      ButtonWidget.outline(
-        '导入',
-        width: 160.w,
-        height: 56.h,
-        fontSize: 26.sp,
         onTap: controller.importDeviceConfigsCsv,
+         backgroundColor: Colors.white,
       ),
       SizedBox(width: 16.w),
       ButtonWidget.outline(
         '导出',
-        width: 160.w,
+        width: 140.w,
         height: 56.h,
         fontSize: 26.sp,
         onTap: controller.exportDeviceConfigsCsv,
+         backgroundColor: Colors.white,
       ),
     ].toRow(mainAxisAlignment: MainAxisAlignment.spaceBetween);
   }

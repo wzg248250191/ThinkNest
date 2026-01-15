@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 关键逻辑：Release 包若未声明 INTERNET 权限，UDP/TCP Socket 创建会被系统拒绝（EPERM）。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 关键逻辑：用于判断网络状态与可用性，避免在无网络时盲目发包。 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 关键逻辑：部分设备/ROM 对局域网组播/广播收包更严格，开启该权限提升发现稳定性。 -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />

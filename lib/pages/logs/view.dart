@@ -10,39 +10,16 @@ class LogsPage extends GetView<LogsController> {
 
   /// 构建“近3天”日期切换栏
   Widget _buildDayTabs() {
-    const double outerButtonWidth = 150;
-    const double outerButtonHeight = 52;
-
-    // 构建单个日期标签按钮
-    Widget buildTab(String text, int offset) {
-      final active = controller.dayOffset == offset;
-      return GestureDetector(
-        onTap: () => controller.selectDayOffset(offset),
-        child: Container(
-          width: outerButtonWidth.w,
-          height: outerButtonHeight.h,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: active ? CustomAppColors.primary : Colors.white,
-            borderRadius: BorderRadius.circular(12.r),
-            border: Border.all(color: CustomAppColors.border),
-          ),
-          child: TextWidget.label(
-            text,
-            fontSize: 22.sp,
-            color: active ? Colors.white : CustomAppColors.text,
-          ),
-        ),
-      );
-    }
-
-    return <Widget>[
-      buildTab('今天', 0),
-      SizedBox(width: 10.w),
-      buildTab('昨天', 1),
-      SizedBox(width: 10.w),
-      buildTab('前天', 2),
-    ].toRow(mainAxisSize: MainAxisSize.min);
+    return ExclusiveButtonGroup(
+      labels: const ['今天', '昨天', '前天'],
+      selectedIndex: controller.dayOffset,
+      onSelected: controller.selectDayOffset,
+      buttonWidth: 150.w,
+      buttonHeight: 58.h,
+      groupRadius: 14.r,
+      fontSize: 22.sp,
+      borderWidth: 1.w,
+    );
   }
 
   /// 构建日志类型筛选栏：全部/错误/打印
@@ -56,7 +33,7 @@ class LogsPage extends GetView<LogsController> {
           selectedIndex: controller.filterIndex,
           onSelected: controller.selectFilterIndex,
           buttonWidth: 150.w,
-          buttonHeight: 52.h,
+          buttonHeight: 58.h,
           groupRadius: 14.r,
           fontSize: 22.sp,
           borderWidth: 1.w,
@@ -70,39 +47,37 @@ class LogsPage extends GetView<LogsController> {
     return GetBuilder<LogsController>(
       id: 'logs_actions',
       builder: (_) {
-        const double outerButtonWidth = 150;
-        const double outerButtonHeight = 52;
-        const double buttonFontSize = 20;
-        const double innerButtonWidth = outerButtonWidth - 16;
-        const double innerButtonHeight = outerButtonHeight - 8;
-
+      
+        final double buttonFontSize = 22.sp;
+        final innerButtonWidth = 150.w-30.w;
+        final innerButtonHeight = 58.h-18.h;      
         if (!controller.selectionMode) {
           return <Widget>[
             ButtonWidget.primary(
               '导出当天',
               onTap: controller.exportDay,
               scale: WidgetScale.medium,
-              fontSize: buttonFontSize.sp,
-              width: innerButtonWidth.w,
-              height: innerButtonHeight.h,
+              fontSize: buttonFontSize,
+              width: innerButtonWidth,
+              height: innerButtonHeight,
             ),
             SizedBox(width: 10.w),
             ButtonWidget.secondary(
               '加载更多',
               onTap: controller.loadMore,
               scale: WidgetScale.medium,
-              fontSize: buttonFontSize.sp,
-              width: innerButtonWidth.w,
-              height: innerButtonHeight.h,
+              fontSize: buttonFontSize,
+              width: innerButtonWidth,
+              height: innerButtonHeight,
             ),
             SizedBox(width: 10.w),
             ButtonWidget.destructive(
               '清除当天',
               onTap: controller.clearCurrentDay,
               scale: WidgetScale.medium,
-              fontSize: buttonFontSize.sp,
-              width: innerButtonWidth.w,
-              height: innerButtonHeight.h,
+              fontSize: buttonFontSize,
+              width: innerButtonWidth,
+              height: innerButtonHeight,
             ),
           ].toRow(mainAxisSize: MainAxisSize.min);
         }
@@ -111,36 +86,36 @@ class LogsPage extends GetView<LogsController> {
           ButtonWidget.secondary(
             '已选${controller.selectedIndexes.length}',
             scale: WidgetScale.medium,
-            fontSize: buttonFontSize.sp,
-            width: innerButtonWidth.w,
-            height: innerButtonHeight.h,
+            fontSize: buttonFontSize,
+            width: innerButtonWidth,
+            height: innerButtonHeight,
           ),
           SizedBox(width: 10.w),
           ButtonWidget.primary(
             '复制',
             onTap: controller.copySelected,
             scale: WidgetScale.medium,
-            fontSize: buttonFontSize.sp,
-            width: innerButtonWidth.w,
-            height: innerButtonHeight.h,
+            fontSize: buttonFontSize,
+            width: innerButtonWidth,
+            height: innerButtonHeight,
           ),
           SizedBox(width: 10.w),
           ButtonWidget.secondary(
             '导出',
             onTap: controller.exportSelected,
             scale: WidgetScale.medium,
-            fontSize: buttonFontSize.sp,
-            width: innerButtonWidth.w,
-            height: innerButtonHeight.h,
+            fontSize: buttonFontSize,
+            width: innerButtonWidth,
+            height: innerButtonHeight,
           ),
           SizedBox(width: 10.w),
           ButtonWidget.secondary(
             '取消',
             onTap: controller.exitSelectionMode,
             scale: WidgetScale.medium,
-            fontSize: buttonFontSize.sp,
-            width: innerButtonWidth.w,
-            height: innerButtonHeight.h,
+            fontSize: buttonFontSize,
+            width: innerButtonWidth,
+            height: innerButtonHeight,
           ),
         ].toRow(mainAxisSize: MainAxisSize.min);
       },
@@ -302,7 +277,7 @@ class LogsPage extends GetView<LogsController> {
           ),
           SizedBox(width: 10.w),
           Container(
-            padding: EdgeInsets.all(6.w),
+           padding: EdgeInsets.all(6.w),
             decoration: groupDecoration,
             child: _buildFilters(),
           ),

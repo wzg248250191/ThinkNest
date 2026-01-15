@@ -91,7 +91,13 @@ class UdpDiscoveryService {
       
     } catch (e) {
       DebugUtils.log('UDP发现服务错误: $e', name: 'socket');
-      onError?.call('UDP发现服务错误: $e');
+      final String msg = e.toString();
+      if (msg.contains('Operation not permitted') || msg.contains('operation not permitted')) {
+        // 关键逻辑：Release 包在 Android 未声明 INTERNET 时，创建 UDP Socket 会直接被系统拒绝（EPERM），给出明确指引便于定位。
+        onError?.call('UDP发现服务错误: 缺少INTERNET权限或系统限制，已为Release补齐权限，请重新安装后重试。原始错误: $e');
+      } else {
+        onError?.call('UDP发现服务错误: $e');
+      }
     } finally {
       timeoutTimer?.cancel();
       _stopDiscovery();

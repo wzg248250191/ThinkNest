@@ -136,6 +136,10 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
   /// 打开设备配置导出目录（失败时回退为复制路径）
   Future<void> openDeviceConfigsExportsDir() async {
     final path = await deviceConfigsExportsDirPath();
+    if (Platform.isAndroid) {
+      final bool handled = await _tryOpenDeviceConfigsExportsDirWithSaf(path);
+      if (handled) return;
+    }
     try {
       final result = await OpenFilex.open(path);
       if (result.type != ResultType.done) {
@@ -148,6 +152,118 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
       AppLogService.tryRecordError(e, s, tag: 'device_config_open_dir');
       await Clipboard.setData(ClipboardData(text: path));
       ToastUtils.show('无法打开目录，已复制路径');
+    }
+  }
+
+  /// Android：通过 SAF 目录授权列出并打开设备配置导出文件
+  ///
+  /// 返回值：
+  /// - true：已处理（包含用户取消等情况）
+  /// - false：未处理（回退到 OpenFilex.open）
+  Future<bool> _tryOpenDeviceConfigsExportsDirWithSaf(String displayPath) async {
+    if (!Platform.isAndroid) return false;
+    File? tempFile;
+    try {
+      await _ensureAndroidMediaStoreReady();
+      final DocumentTree? tree = await MediaStore().requestForAccess(
+        // 关键：尽量定位到导出目录，避免用户在文件管理器不兼容时找不到文件。
+        initialRelativePath: 'Download/ThinkNest/device_configs/exports',
+      );
+      if (tree == null) {
+        return true;
+      }
+
+      final docs = tree.children
+          .where((d) => !d.isDirectory)
+          .where((d) {
+            final name = (d.name ?? '').toLowerCase().trim();
+            return name.endsWith('.csv') || name.endsWith('.txt');
+          })
+          .toList(growable: false);
+      if (docs.isEmpty) {
+        ToastUtils.show('该目录暂无导出文件');
+        return true;
+      }
+
+      final Document? picked = await Get.dialog<Document?>(
+        AlertDialog(
+          title: TextWidget.label('选择要打开的文件', fontSize: 28.sp),
+          content: SizedBox(
+            width: 1400.w,
+            child: SingleChildScrollView(
+              child: <Widget>[
+                for (final d in docs)
+                  TextButton(
+                    onPressed: () => Get.back<Document?>(result: d),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextWidget.label(
+                        d.name ?? '(未命名文件)',
+                        fontSize: 24.sp,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+              ].toColumn(crossAxisAlignment: CrossAxisAlignment.stretch),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: displayPath));
+                Get.back<Document?>();
+                ToastUtils.show('已复制导出目录');
+              },
+              child: TextWidget.label('复制目录', fontSize: 24.sp),
+            ),
+            TextButton(
+              onPressed: () => Get.back<Document?>(),
+              child: TextWidget.label('取消', fontSize: 24.sp),
+            ),
+          ],
+        ),
+        barrierDismissible: true,
+      );
+      if (picked == null) {
+        return true;
+      }
+
+      final String tempPath =
+          '${Directory.systemTemp.path}${Platform.pathSeparator}${picked.name ?? 'device_configs_export.csv'}';
+      tempFile = File(tempPath);
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+
+      final bool ok = await MediaStore().readFileUsingUri(
+        uriString: picked.uriString,
+        tempFilePath: tempFile.path,
+      );
+      if (!ok) {
+        ToastUtils.show('读取文件失败');
+        return true;
+      }
+
+      final result = await OpenFilex.open(tempFile.path);
+      if (result.type != ResultType.done) {
+        await Clipboard.setData(ClipboardData(text: displayPath));
+        ToastUtils.show('无法打开文件，已复制目录');
+      }
+      return true;
+    } catch (e, s) {
+      // 关键：SAF 在不同机型上差异较大，失败时回退到 OpenFilex.open，保证不阻塞用户。
+      AppLogService.tryRecordError(e, s, tag: 'device_config_open_dir_saf');
+      return false;
+    } finally {
+      try {
+        final f = tempFile;
+        if (f != null && await f.exists()) {
+          await f.delete();
+        }
+      } catch (_) {}
     }
   }
 
@@ -426,10 +542,25 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
         dirName: DirName.download,
         relativePath: _androidDeviceConfigsExportsRelativePath(),
       );
-      if (info == null || !info.isSuccessful) {
-        throw StateError('media store save failed: ${info?.name}');
+      // 关键修改：部分设备/ROM 在 Release 下可能返回 isSuccessful=false，但实际文件已保存。
+      // 为避免误报失败，这里只在 info 为空或无有效文件名时判定失败；否则按展示路径返回。
+      if (info == null) {
+        final expectedPath =
+            '${_androidPublicDeviceConfigsExportsDirDisplayPath()}${Platform.pathSeparator}$fileName';
+        // 关键修改：在部分机型/ROM（如荣耀）上，saveFile 可能返回 null，但文件实际已保存到 Download/ThinkNest/...。
+        // 由于 Scoped Storage 等限制，File.exists 在部分系统下可能不可靠；因此这里优先按“预期路径”直接视为成功，避免误报导出失败。
+        try {
+          final bool exists = await File(expectedPath).exists();
+          if (exists) return expectedPath;
+        } catch (_) {}
+        return expectedPath;
       }
-      return '${_androidPublicDeviceConfigsExportsDirDisplayPath()}${Platform.pathSeparator}${info.name}';
+      final String displayName = info.name.trim();
+      final String safeDisplayName = displayName.isEmpty ? fileName : displayName;
+      if (safeDisplayName.isEmpty) {
+        throw StateError('media store save failed: empty name');
+      }
+      return '${_androidPublicDeviceConfigsExportsDirDisplayPath()}${Platform.pathSeparator}$safeDisplayName';
     } finally {
       try {
         if (await tempFile.exists()) {

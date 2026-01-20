@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:think_nest/common/utils/debug_utils.dart';
+import 'package:think_nest/common/index.dart';
+import 'update/update_service.dart';
 
 class SettingsController extends GetxController {
   SettingsController();
@@ -14,6 +15,7 @@ class SettingsController extends GetxController {
   bool isAbout = false;
   // 内部 PageView 的控制器，用于右侧内容滑动切换
   final PageController innerPageController = PageController(initialPage: 0);
+  final SettingsUpdateService _updateService = SettingsUpdateService();
 
   _initData() {
     update(["settings"]);
@@ -131,5 +133,11 @@ class SettingsController extends GetxController {
     // 释放内部 PageController
     innerPageController.dispose();
     super.onClose();
+  }
+
+  /// 手动检查更新并触发下载安装
+  Future<void> checkUpdateManually() async {
+    // 关键：更新逻辑收敛到独立模块，控制器仅做入口委托，避免设置页过载
+    await _updateService.checkUpdateManually();
   }
 }

@@ -59,7 +59,7 @@ class SettingsPage extends GetView<SettingsController> {
                   icon: Icon(
                     Icons.receipt_long,
                     size: 54.sp,
-                    color: CustomAppColors.text,
+                    color: CustomAppColors.primary,
                   ),
                   name: TextWidget.label(
                     '日志',
@@ -79,6 +79,42 @@ class SettingsPage extends GetView<SettingsController> {
                 LongbuttonWidget(
                   width: 1760.w,
                   height: 150.h,
+                  icon: Icon(
+                    Icons.system_update_alt,
+                    size: 54.sp,
+                    color: CustomAppColors.primary,
+                  ),
+                  name: TextWidget.label(
+                    '检查更新',
+                    fontSize: 26.sp,
+                  ),
+                  title: <Widget>[
+                    TextWidget.label(
+                      '点击检查并下载安装包',
+                      fontSize: 26.sp,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(width: 16.w),
+                    TextWidget.label(
+                      controller.appVersionLabel,
+                      fontSize: 24.sp,
+                      color: CustomAppColors.text.withValues(alpha: 0.6),
+                    ),
+                  ].toRow(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                  ),
+                  subIcon: const Icon(Icons.chevron_right),
+                  onTap: controller.checkUpdateManually,
+                ),
+                SizedBox(
+                  width: 1680.w,
+                  height: 1.h,
+                ).decorated(color: CustomAppColors.border).paddingHorizontal(40.w),
+                LongbuttonWidget(
+                  width: 1760.w,
+                  height: 150.h,
                   icon: ImageWidget.svg(
                     AssetsSvgs.settingsInfoSvg,
                     width: 50.w,
@@ -89,7 +125,7 @@ class SettingsPage extends GetView<SettingsController> {
                     fontSize: 26.sp,
                   ),
                   title: TextWidget.label(
-                    controller.appVersionLabel,
+                    '',
                     fontSize: 26.sp,
                   ),
                   subIcon: const Icon(Icons.chevron_right),

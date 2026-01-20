@@ -74,7 +74,7 @@ flutter {
 val releaseApkNamePrefixProvider = providers.provider {
     val versionName = android.defaultConfig.versionName ?: "0.0.0"
     val versionCode = android.defaultConfig.versionCode ?: 0
-    "思巢-成长之光-$versionName+$versionCode"
+    "ThinkingNest"
 }
 
 tasks.register<Copy>("syncReleaseApkToFlutterApkDir") {

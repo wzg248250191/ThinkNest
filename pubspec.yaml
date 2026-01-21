@@ -1,7 +1,7 @@
 name: think_nest
 description: "思巢-成长之光-安卓平板端."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-version: 1.0.0+2601201
+version: 1.0.0+2601211
 environment:
   sdk: ^3.9.2
 

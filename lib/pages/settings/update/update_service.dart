@@ -146,6 +146,14 @@ class SettingsUpdateService {
       }
       await _ensureAndroidMediaStoreReady();
       final String fileName = 'ThinkingNest_update.apk';
+      final String targetPath =
+          '/storage/emulated/0/Download/${_androidUpdatesRelativePath().replaceAll('/', Platform.pathSeparator)}${Platform.pathSeparator}$fileName';
+      try {
+        final File existingFile = File(targetPath);
+        if (await existingFile.exists()) {
+          await existingFile.delete();
+        }
+      } catch (_) {}
       final Directory tempDir = await getTemporaryDirectory();
       final File tempFile = File('${tempDir.path}${Platform.pathSeparator}$fileName');
       if (await tempFile.exists()) {

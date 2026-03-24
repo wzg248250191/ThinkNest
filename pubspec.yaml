@@ -26,6 +26,7 @@ dependencies:
   cached_network_image: ^3.4.1
   # svg 图片  
   flutter_svg: ^2.2.3
+  flutter_html: ^3.0.0
   adaptive_theme: ^3.7.2
   #缓存
   path_provider: ^2.1.4

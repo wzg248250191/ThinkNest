@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:think_nest/common/index.dart';
+import 'package:think_nest/common/values/course_introduces.dart';
 
 import '../../../../index.dart';
 
@@ -20,10 +21,29 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
         final title = controller.courseId ?? '课程';
         return Scaffold(
           backgroundColor: CustomAppColors.card,
-          appBar: AppbarWidget(
-            title: title,
-            isBack: true,
-            onTap: mainController.closeCourseController,
+          appBar: PreferredSize(
+            preferredSize: Size.fromHeight(160.h),
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: AppbarWidget(
+                    title: title,
+                    isBack: true,
+                    onTap: mainController.closeCourseController,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ButtonWidget.secondary(
+                    '课程介绍',
+                    width: 120.w,
+                    height: 48.h,
+                    fontSize: 28.sp,
+                    onTap: () => _openCourseIntroducePage(),
+                  ).paddingRight(40.w),
+                ),
+              ],
+            ),
           ),
           body: _buildView(context),
         );
@@ -36,6 +56,12 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
       _buildLeft().width(1440.w).height(940.w).paddingLeft(45.w),
       _buildRight().width(420.w).height(940.w).paddingLeft(45.w),
     ].toRow().alignment(Alignment.center);
+  }
+
+  void _openCourseIntroducePage() {
+    final String title = controller.courseId ?? '课程';
+    final String content = courseIntroduces[title] ?? '暂无课程介绍';
+    Get.to<void>(() => CourseIntroducePage(title: title, content: content));
   }
 
   Widget _buildLeft() {

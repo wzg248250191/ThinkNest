@@ -10,4 +10,5 @@ export './view.dart';
 export './binding.dart';
 export './course_overlay/view/course_detail_overlay.dart';
 export './course_overlay/widgets/desk_part.dart';
+export './course_overlay/widgets/course_introduce_page.dart';
 export './course_overlay/widgets/wall_part.dart';

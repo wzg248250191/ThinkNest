@@ -33,12 +33,14 @@ class CourseDetailOverlay extends GetView<SingleCourseController> {
                   ),
                 ),
                 Align(
-                  alignment: Alignment.centerRight,
-                  child: ButtonWidget.secondary(
+                  alignment: Alignment.bottomRight,
+                  child: ButtonWidget.ghost(
                     '课程介绍',
                     width: 120.w,
                     height: 48.h,
                     fontSize: 28.sp,
+                    backgroundColor: CustomAppColors.primary,
+                    textColor: Colors.white,
                     onTap: () => _openCourseIntroducePage(),
                   ).paddingRight(40.w),
                 ),

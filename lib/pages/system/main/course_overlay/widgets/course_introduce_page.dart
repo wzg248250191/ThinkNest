@@ -34,16 +34,20 @@ class CourseIntroducePage extends StatelessWidget {
   @override
   /// 构建课程介绍全屏页，顶部使用通用返回 AppBar，正文按 HTML 富文本渲染
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: CustomAppColors.card,
-      appBar: AppbarWidget(
-        title: '$title - 课程介绍',
-        isBack: true,
-        onTap: () => Get.back<void>(),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 30.h),
-        child: Html(data: _normalizeHtmlSpacing(content)),
+    return MediaQuery(
+      // 关键逻辑：课程介绍页统一放大 1.5 倍文本缩放，仅作用于当前页面，避免影响全局页面排版。
+      data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.5)),
+      child: Scaffold(
+        backgroundColor: CustomAppColors.card,
+        appBar: AppbarWidget(
+          title: '$title - 课程介绍',
+          isBack: true,
+          onTap: () => Get.back<void>(),
+        ),
+        body: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(horizontal: 40.w, vertical: 30.h),
+          child: Html(data: _normalizeHtmlSpacing(content)),
+        ),
       ),
     );
   }

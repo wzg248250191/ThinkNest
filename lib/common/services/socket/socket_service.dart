@@ -48,6 +48,7 @@ class _ServerEndpointState {
   int lastConnectedMs = 0;
   int lastMessageReceivedMs = 0;
   int lastHealthRecoverTriggeredMs = 0;
+  bool isAwaitingTypeConfirmation = false;
 }
 
 /// Socket服务（GetX Service）

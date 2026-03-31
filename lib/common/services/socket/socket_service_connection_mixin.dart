@@ -52,6 +52,12 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   static const Duration _recoverThrottle = Duration(seconds: 10);
   static const Duration _foregroundHealthCheckActiveWindow = Duration(seconds: 120);
 
+  @override
+  /// 返回“通过类型复核后的连接状态”，避免底层 Socket 刚连上时 UI 提前显示为成功
+  bool isConnected(ServerType serverType) {
+    return _endpoint(serverType).connectionState.value == SocketState.connected;
+  }
+
   /// 初始化应用生命周期监听与前台连接健康检查
   void _initLifecycleAndHealthCheck() {
     WidgetsBinding.instance.addObserver(this);
@@ -244,11 +250,12 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     requestCourseList(serverType);
   }
 
-  /// 点击触发的单次连接尝试：先尝试底层 reconnect 一次，再用历史 IP 直连 2 次（不做 UDP 兜底）
+  /// 点击触发的单次连接尝试：先尝试底层 reconnect 一次，再用历史 IP 直连 2 次，必要时 UDP 兜底
   ///
   /// 说明：
   /// - 用于“用户操作时若未连接，立刻提示失败，但后台做一次连接准备”的场景
   /// - 不开启自动重连，避免后台持续重连造成耗电/耗网
+  /// - 当历史 IP 类型不匹配或不可达时，允许当次 UDP 发现兜底，减少“点击一次就失败”的体感
   /// - 关键逻辑：走 ensureConnected 的并发去重与优先级仲裁，避免与启动/开关触发的连接并发时重复 connect
   Future<bool> connectOncePreferLastEndpointThenUdp(
     ServerType serverType, {
@@ -264,11 +271,13 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     );
     return ensureConnected(
       serverType,
-      udpFallback: false,
+      // 关键逻辑：课程连接场景也允许 UDP 兜底，确保历史 IP 不可用/类型迁移后可在当次恢复连接。
+      udpFallback: true,
       preferReconnect: true,
       lastEndpointAttempts: 2,
       autoReconnect: false,
       connectTimeout: connectTimeout,
+      udpTimeout: connectTimeout,
       priority: 3,
       source: '课程详情',
     ).then((ok) {
@@ -448,6 +457,11 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
       return startupScanFuture!;
     }
 
+    // 关键逻辑：先用一次 UDP 扫描对齐“历史 IP -> 实际服务端类型”；
+    // 若发现墙/桌历史 IP 指向了错误类型，先清错链路缓存并迁移到正确类型，避免后续仍按错误类型直连。
+    final startupDiscoveredServers = await startupScanOnce();
+    await _reconcileCachedEndpointsWithDiscoveredServers(startupDiscoveredServers);
+
     // 启动恢复单条链路连接：通过 ensureConnected 复用“历史 IP + UDP 兜底”，并避免与其它触发点并发冲突。
     Future<bool> recoverOne(ServerType serverType) async {
       if (_clientManager.getClient(serverType).isConnected) {
@@ -512,6 +526,109 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
       name: 'socket',
     );
     return {ServerType.wall: wallOk, ServerType.desktop: desktopOk};
+  }
+
+  /// 用 UDP 发现结果校准历史端点缓存：类型不匹配时清理错误链路并迁移到正确链路
+  Future<void> _reconcileCachedEndpointsWithDiscoveredServers(List<DiscoveredServer> servers) async {
+    Future<void> reconcileOne(ServerType cachedType) async {
+      final cached = _loadLastServerEndpoint(cachedType);
+      if (cached == null) {
+        return;
+      }
+      final discovered = _pickDiscoveredServerByIp(servers, cached.ip);
+      if (discovered == null) {
+        return;
+      }
+      final CLIENTEND expectedType = cachedType.toClientEnd();
+      if (discovered.serverType == expectedType) {
+        return;
+      }
+      final ServerType? migratedType = _tryMapClientEndToServerType(discovered.serverType);
+      // 关键逻辑：发现“历史链路类型 != 实际服务端类型”时，必须先清理错误链路缓存，避免继续误连。
+      await _clearLastServerEndpoint(cachedType);
+      // 关键逻辑：若能识别出实际类型，则把该 IP 迁移到正确链路缓存，保证下一步按正确类型连接。
+      if (migratedType != null) {
+        await _persistLastServerEndpoint(migratedType, discovered.ipAddress, discovered.tcpPort);
+        DebugUtils.log(
+          '启动前缓存校准：已迁移历史IP|${cachedType.displayName}->${migratedType.displayName}|ip=${discovered.ipAddress}',
+          name: 'socket',
+        );
+      } else {
+        DebugUtils.log(
+          '启动前缓存校准：已清理异常类型历史IP|${cachedType.displayName}|ip=${cached.ip}',
+          name: 'socket',
+        );
+      }
+    }
+
+    await reconcileOne(ServerType.wall);
+    await reconcileOne(ServerType.desktop);
+  }
+
+  /// 校验历史缓存 IP 的实际服务端类型，必要时执行“清理错误缓存 + 迁移到正确类型”
+  Future<bool> _validateAndMaybeMigrateCachedEndpointByIp({
+    required ServerType serverType,
+    required String ip,
+    required int fallbackPort,
+    required Duration udpTimeout,
+    required Future<List<DiscoveredServer>> Function()? scanOnceOverride,
+    bool forceFreshScan = false,
+    bool requireKnownType = false,
+    bool recoverMigratedTypeNow = false,
+  }) async {
+    List<DiscoveredServer> servers;
+    try {
+      if (forceFreshScan) {
+        // 关键逻辑：连接后类型复核需要拿到“当前最新”的服务端类型，不能复用可能过期的 inFlight 扫描结果。
+        servers = await scanForServers(timeout: udpTimeout);
+      } else {
+        servers = await (scanOnceOverride?.call() ?? _scanForServersOnce(timeout: udpTimeout));
+      }
+    } catch (_) {
+      return true;
+    }
+    final discovered = _pickDiscoveredServerByIp(servers, ip);
+    if (discovered == null) {
+      // 关键逻辑：未发现“该 IP 的当前服务器响应”时，不应清理历史缓存；
+      // 这通常只是目标服务器未开启/网络瞬时丢包，不能据此判定类型已变化。
+      if (requireKnownType) {
+        DebugUtils.log(
+          '历史IP类型校验：未识别到该IP的当前类型，保留缓存并等待下次校验|${serverType.displayName}|ip=$ip',
+          name: 'socket',
+        );
+      }
+      return true;
+    }
+    final CLIENTEND expectedType = serverType.toClientEnd();
+    if (discovered.serverType == expectedType) {
+      return true;
+    }
+    final ServerType? migratedType = _tryMapClientEndToServerType(discovered.serverType);
+    // 关键逻辑：历史 IP 实际类型与目标链路不一致时，必须立刻清理错误链路缓存，避免继续误连。
+    await _clearLastServerEndpoint(serverType);
+    // 关键逻辑：若识别出真实类型，则把同一 IP 迁移到真实链路缓存，下一次优先按正确类型直连。
+    if (migratedType != null) {
+      await _persistLastServerEndpoint(
+        migratedType,
+        discovered.ipAddress,
+        discovered.tcpPort > 0 ? discovered.tcpPort : fallbackPort,
+      );
+      DebugUtils.log(
+        '历史IP类型校验：已迁移缓存|${serverType.displayName}->${migratedType.displayName}|ip=${discovered.ipAddress}',
+        name: 'socket',
+      );
+      // 关键逻辑：当“当前链路类型”被判定为错误且已迁移到另一链路时，立即触发目标链路恢复，
+      // 避免只看到“旧链路断开”而没有“新链路连上”的状态反馈。
+      if (recoverMigratedTypeNow && migratedType != serverType && _isAppInForeground) {
+        unawaited(_recoverMigratedServerType(migratedType));
+      }
+    } else {
+      DebugUtils.log(
+        '历史IP类型校验：已清理异常缓存|${serverType.displayName}|ip=$ip',
+        name: 'socket',
+      );
+    }
+    return false;
   }
 
   /// 业务强关联：确保指定类型服务器已连接（历史 IP 优先，必要时 UDP 扫描兜底）
@@ -648,31 +765,79 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
           return false;
         }
       } else {
-        if (preferReconnect) {
-          final bool reconnectOk = await _clientManager.reconnect(
-            serverType,
-            timeout: connectTimeout,
+        final bool shouldApplyHistoricalTypeCheck = _shouldApplyHistoricalTypeCheck(serverType);
+        if (shouldApplyHistoricalTypeCheck) {
+          final bool endpointTypeMatched = await _validateAndMaybeMigrateCachedEndpointByIp(
+            serverType: serverType,
+            ip: endpoint.ip,
+            fallbackPort: endpoint.port,
+            udpTimeout: udpTimeout,
+            scanOnceOverride: scanOnceOverride,
+            requireKnownType: udpFallback,
+            recoverMigratedTypeNow: true,
           );
-          if (reconnectOk && _clientManager.getClient(serverType).isConnected) {
-            return true;
-          }
-        }
+          if (!endpointTypeMatched) {
+            // 关键逻辑：历史 IP 被识别为“另一类型服务器”时，本次不再继续直连旧链路；
+            // 让流程回落到 UDP 兜底（或按调用方策略失败返回），避免把桌面误当墙面连上。
+            if (!udpFallback) {
+              return false;
+            }
+          } else {
+            if (preferReconnect) {
+              final bool reconnectOk = await _clientManager.reconnect(
+                serverType,
+                timeout: connectTimeout,
+              );
+              if (reconnectOk && _clientManager.getClient(serverType).isConnected) {
+                return true;
+              }
+            }
 
-        final int attempts = lastEndpointAttempts <= 0 ? 1 : lastEndpointAttempts;
-        for (int i = 0; i < attempts; i++) {
-          if (_ensureConnectSessions[serverType]?.id != sessionId ||
-              (_ensureConnectSessions[serverType]?.cancelled ?? false)) {
-            return false;
+            final int attempts = lastEndpointAttempts <= 0 ? 1 : lastEndpointAttempts;
+            for (int i = 0; i < attempts; i++) {
+              if (_ensureConnectSessions[serverType]?.id != sessionId ||
+                  (_ensureConnectSessions[serverType]?.cancelled ?? false)) {
+                return false;
+              }
+              final ok = await connect(
+                serverType,
+                endpoint.ip,
+                endpoint.port,
+                autoReconnect: autoReconnect,
+                connectTimeout: connectTimeout,
+              );
+              if (ok) {
+                return true;
+              }
+            }
           }
-          final ok = await connect(
-            serverType,
-            endpoint.ip,
-            endpoint.port,
-            autoReconnect: autoReconnect,
-            connectTimeout: connectTimeout,
-          );
-          if (ok) {
-            return true;
+        } else {
+          if (preferReconnect) {
+            final bool reconnectOk = await _clientManager.reconnect(
+              serverType,
+              timeout: connectTimeout,
+            );
+            if (reconnectOk && _clientManager.getClient(serverType).isConnected) {
+              return true;
+            }
+          }
+
+          final int attempts = lastEndpointAttempts <= 0 ? 1 : lastEndpointAttempts;
+          for (int i = 0; i < attempts; i++) {
+            if (_ensureConnectSessions[serverType]?.id != sessionId ||
+                (_ensureConnectSessions[serverType]?.cancelled ?? false)) {
+              return false;
+            }
+            final ok = await connect(
+              serverType,
+              endpoint.ip,
+              endpoint.port,
+              autoReconnect: autoReconnect,
+              connectTimeout: connectTimeout,
+            );
+            if (ok) {
+              return true;
+            }
           }
         }
       }
@@ -732,6 +897,13 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     await storage.setString(_portStorageKey(serverType), port.toString());
   }
 
+  /// 清理指定服务器类型的历史端点缓存（IP/端口）
+  Future<void> _clearLastServerEndpoint(ServerType serverType) async {
+    final storage = Storage();
+    await storage.remove(_ipStorageKey(serverType));
+    await storage.remove(_portStorageKey(serverType));
+  }
+
   /// 获取对应服务器的 IP 存储 Key
   String _ipStorageKey(ServerType serverType) {
     switch (serverType) {
@@ -779,6 +951,28 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     return null;
   }
 
+  /// 从扫描结果中按 IP 查找服务器
+  DiscoveredServer? _pickDiscoveredServerByIp(List<DiscoveredServer> servers, String ip) {
+    for (final s in servers) {
+      if (s.ipAddress == ip) {
+        return s;
+      }
+    }
+    return null;
+  }
+
+  /// 尝试将协议层 CLIENTEND 安全映射为业务层 ServerType；未知值返回 null
+  ServerType? _tryMapClientEndToServerType(CLIENTEND clientEnd) {
+    switch (clientEnd) {
+      case CLIENTEND.WALL:
+        return ServerType.wall;
+      case CLIENTEND.Desktop:
+        return ServerType.desktop;
+      default:
+        return null;
+    }
+  }
+
   /// 断开服务器连接
   void disconnect(ServerType serverType) {
     _clientManager.disconnect(serverType);
@@ -822,8 +1016,9 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
 
   void _onServerStateChanged(ServerType serverType, SocketState state) {
     final endpoint = _endpoint(serverType);
-    endpoint.connectionState.value = state;
     if (state == SocketState.connecting || state == SocketState.disconnected || state == SocketState.failed) {
+      endpoint.connectionState.value = state;
+      endpoint.isAwaitingTypeConfirmation = false;
       // 关键逻辑：一旦进入新一轮连接尝试（或连接失败/断开），需要重置标记，确保下次 connected 会补发一次课程列表。
       endpoint.hasRequestedCourseListInCurrentConnection = false;
       // 关键逻辑：连接状态变化时重置接收时间戳，避免前台健康检查误判为“长期无消息”。
@@ -831,18 +1026,31 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     }
     if (state == SocketState.disconnected) {
       endpoint.connectedServerIp.value = null;
+      endpoint.isAwaitingTypeConfirmation = false;
     }
     if (state == SocketState.connected) {
-      endpoint.lastConnectedMs = DateTime.now().millisecondsSinceEpoch;
-      // 关键逻辑：存在“底层自动重连成功，但未走 SocketService.connect()”的场景；
-      // 此时需要在连接就绪时补发课程列表请求，否则 UI 可能一直没有本地课程清单。
+      final bool shouldConfirmTypeBeforeConnected = _shouldConfirmTypeBeforeConnected(serverType);
+      if (shouldConfirmTypeBeforeConnected) {
+        // 关键逻辑：仅在“业务侧 ensureConnected 流程”中启用类型确认门禁；
+        // 底层自动重连不走该门禁，避免你反馈的“切换类型后仍卡在旧链路显示”的问题。
+        endpoint.connectionState.value = SocketState.connecting;
+        endpoint.isAwaitingTypeConfirmation = true;
+      } else {
+        endpoint.isAwaitingTypeConfirmation = false;
+        endpoint.connectionState.value = SocketState.connected;
+        endpoint.lastConnectedMs = DateTime.now().millisecondsSinceEpoch;
+        _requestCourseListOncePerConnection(serverType);
+      }
       if (endpoint.connectedServerIp.value == null) {
         final cached = _loadLastServerEndpoint(serverType);
         if (cached != null) {
           endpoint.connectedServerIp.value = cached.ip;
         }
       }
-      _requestCourseListOncePerConnection(serverType);
+      sendHeartbeat(serverType);
+      if (shouldConfirmTypeBeforeConnected) {
+        unawaited(_confirmTypeOrFallback(serverType));
+      }
     }
     //当所有服务器连接都断开时，重置课程列表相关的 UI 状态 。
     /*if (!_clientManager.isAnyConnected) {
@@ -852,12 +1060,159 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   }
 
   void _onServerMessageReceived(ServerType serverType, MESSAGE message) {
+    if (!_validateServerTypeByHeartbeat(serverType, message)) {
+      return;
+    }
     final endpoint = _endpoint(serverType);
     // 关键逻辑：收到任意消息（含 HeartEcho）就刷新接收时间戳，用于前台“假连接”检测。
     endpoint.lastMessageReceivedMs = DateTime.now().millisecondsSinceEpoch;
     endpoint.messageController.add(message);
     _allMessageController.add((serverType, message));
     _handleMessage(serverType, message);
+  }
+
+  /// 基于心跳回包校验服务端类型，若类型不匹配则断开并清理该链路历史 IP 缓存
+  bool _validateServerTypeByHeartbeat(ServerType serverType, MESSAGE message) {
+    final endpoint = _endpoint(serverType);
+    // 关键逻辑：类型确认策略仅在“启动恢复且等待确认”阶段生效；
+    // 设备开关/课程连接/底层自动重连保持原始行为，不做该拦截与迁移。
+    if (!endpoint.isAwaitingTypeConfirmation) {
+      return true;
+    }
+    if (message.mSGtype != MSGTYPE.HeartEcho) {
+      return false;
+    }
+    if (!message.hasEchoData() || !message.echoData.hasClientEnd()) {
+      return false;
+    }
+    final CLIENTEND expectedClientEnd = serverType.toClientEnd();
+    final CLIENTEND actualClientEnd = message.echoData.clientEnd;
+    if (expectedClientEnd == actualClientEnd) {
+      if (endpoint.isAwaitingTypeConfirmation && _clientManager.getClient(serverType).isConnected) {
+        endpoint.isAwaitingTypeConfirmation = false;
+        endpoint.connectionState.value = SocketState.connected;
+        endpoint.lastConnectedMs = DateTime.now().millisecondsSinceEpoch;
+        _requestCourseListOncePerConnection(serverType);
+      }
+      return true;
+    }
+    // 关键逻辑：若“墙/桌”链路收到的心跳类型与预期不一致，说明历史 IP 可能指向了错误服务端；
+    // 立即清理该链路缓存并断开，避免下次启动继续用错误 IP 反复直连。
+    final String? mismatchedIp = endpoint.connectedServerIp.value;
+    final ServerType? migratedType = _tryMapClientEndToServerType(actualClientEnd);
+    // 关键逻辑：当已明确对端真实类型时，把当前 IP 迁移到真实链路缓存，确保后续“新类型链路”可立即命中历史直连。
+    if (mismatchedIp != null && mismatchedIp.isNotEmpty && migratedType != null && migratedType != serverType) {
+      unawaited(_persistLastServerEndpoint(migratedType, mismatchedIp, 8000));
+    }
+    unawaited(_clearLastServerEndpoint(serverType));
+    endpoint.isAwaitingTypeConfirmation = false;
+    endpoint.connectedServerIp.value = null;
+    _clientManager.disconnect(serverType);
+    // 关键逻辑：类型不匹配后优先恢复“真实类型链路”；无法识别真实类型时，回退为原链路 UDP 纠偏。
+    if (_isAppInForeground) {
+      if (migratedType != null && migratedType != serverType) {
+        unawaited(_recoverMigratedServerType(migratedType));
+      } else {
+        unawaited(_recoverConnectionAfterTypeMismatch(serverType));
+      }
+    }
+    DebugUtils.log(
+      '检测到服务端类型不匹配，已清理历史IP并断开|期望=${expectedClientEnd.name}|实际=${actualClientEnd.name}|链路=${serverType.displayName}',
+      name: 'socket',
+    );
+    return false;
+  }
+
+  /// 服务端类型不匹配后的纠偏连接：按“无历史 IP”策略走 UDP 发现并尝试重连
+  Future<void> _recoverConnectionAfterTypeMismatch(ServerType serverType) async {
+    try {
+      await ensureConnected(
+        serverType,
+        autoReconnect: false,
+        udpFallback: true,
+        preferReconnect: false,
+        lastEndpointAttempts: 1,
+        connectTimeout: const Duration(seconds: 2),
+        udpTimeout: const Duration(seconds: 2),
+        priority: 2,
+        source: '类型校验纠偏',
+      );
+      // 关键逻辑：纠偏成功后恢复自动重连能力，保持与启动恢复成功后的行为一致。
+      if (_clientManager.getClient(serverType).isConnected) {
+        _clientManager.setAutoReconnectEnabled(serverType, true);
+      }
+    } catch (_) {}
+  }
+
+  /// 等待类型确认超时后的兜底：若仍处于连接且未拿到心跳类型，按可用性优先确认 connected
+  Future<void> _confirmTypeOrFallback(ServerType serverType) async {
+    await Future<void>.delayed(const Duration(seconds: 2));
+    final endpoint = _endpoint(serverType);
+    if (!endpoint.isAwaitingTypeConfirmation) {
+      return;
+    }
+    if (!_clientManager.getClient(serverType).isConnected) {
+      endpoint.isAwaitingTypeConfirmation = false;
+      return;
+    }
+    final String? ip = endpoint.connectedServerIp.value;
+    if (ip != null && ip.isNotEmpty) {
+      final bool endpointTypeMatched = await _validateAndMaybeMigrateCachedEndpointByIp(
+        serverType: serverType,
+        ip: ip,
+        fallbackPort: 8000,
+        udpTimeout: const Duration(seconds: 2),
+        scanOnceOverride: null,
+        forceFreshScan: true,
+        requireKnownType: false,
+        recoverMigratedTypeNow: true,
+      );
+      if (!endpointTypeMatched) {
+        // 关键逻辑：兜底超时阶段若已识别出“当前 IP 类型不匹配”，不能再回退为 connected，
+        // 否则会出现“墙面已断开后立刻改桌面，UI 又显示墙面连接成功”的误报。
+        endpoint.isAwaitingTypeConfirmation = false;
+        endpoint.connectedServerIp.value = null;
+        _clientManager.disconnect(serverType);
+        return;
+      }
+    }
+    // 关键逻辑：部分服务端在启动阶段可能延迟/漏发 HeartEcho，超时后先恢复可用连接，避免启动看起来“全未连接”。
+    endpoint.isAwaitingTypeConfirmation = false;
+    endpoint.connectionState.value = SocketState.connected;
+    endpoint.lastConnectedMs = DateTime.now().millisecondsSinceEpoch;
+    _requestCourseListOncePerConnection(serverType);
+  }
+
+  /// 判断当前连接是否应当启用“先类型确认再标记 connected”
+  bool _shouldConfirmTypeBeforeConnected(ServerType serverType) {
+    // 关键逻辑：该策略仅用于 app 启动恢复场景；
+    // 设备开关与课程触发连接恢复原状（连接成功即标记 connected），避免影响交互响应速度。
+    return _ensureConnectSessions[serverType]?.source == 'app启动';
+  }
+
+  /// 判断当前历史 IP 直连是否应启用“服务器类型一致性校验”
+  bool _shouldApplyHistoricalTypeCheck(ServerType serverType) {
+    return _ensureConnectSessions[serverType]?.source == 'app启动';
+  }
+
+  /// 当历史链路被迁移到另一服务类型后，主动尝试连接目标链路并恢复自动重连能力
+  Future<void> _recoverMigratedServerType(ServerType serverType) async {
+    try {
+      final bool ok = await ensureConnected(
+        serverType,
+        autoReconnect: false,
+        udpFallback: true,
+        preferReconnect: true,
+        lastEndpointAttempts: 2,
+        connectTimeout: const Duration(seconds: 2),
+        udpTimeout: const Duration(seconds: 3),
+        priority: 1,
+        source: '类型迁移恢复',
+      );
+      if (ok && _clientManager.getClient(serverType).isConnected) {
+        _clientManager.setAutoReconnectEnabled(serverType, true);
+      }
+    } catch (_) {}
   }
 
   UdpDiscoveryService get discoveryService => _discoveryService;

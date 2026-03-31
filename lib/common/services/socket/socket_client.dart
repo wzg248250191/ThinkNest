@@ -24,10 +24,12 @@ class SocketClient {
   /// 创建 Socket 客户端并配置自动重连策略
   SocketClient({
     this.clientName = '未知端',
+    required this.clientEnd,
     this.maxReconnectAttempts = 5,
   });
 
   final String clientName;
+  final CLIENTEND clientEnd;
 
   /// Socket实例
   Socket? _socket;
@@ -580,7 +582,7 @@ class SocketClient {
   void _sendHeartbeat() {
     final heartbeat = MESSAGE()
       ..mSGtype = MSGTYPE.HeartEcho
-      ..echoData = (EchoData()..clientEnd = CLIENTEND.Desktop);
+      ..echoData = (EchoData()..clientEnd = clientEnd);
     
     sendMessage(heartbeat);
   }

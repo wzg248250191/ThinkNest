@@ -55,7 +55,7 @@ class DeviceConfigView extends GetView<IntegrationController> {
         width: 140.w,
         height: 56.h,
         fontSize: 26.sp,
-        onTap: controller.importDeviceConfigsCsv,
+        onTap: controller.importDeviceConfigsJson,
          backgroundColor: Colors.white,
       ),
       SizedBox(width: 16.w),
@@ -64,7 +64,7 @@ class DeviceConfigView extends GetView<IntegrationController> {
         width: 140.w,
         height: 56.h,
         fontSize: 26.sp,
-        onTap: controller.exportDeviceConfigsCsv,
+        onTap: controller.exportDeviceConfigsJson,
          backgroundColor: Colors.white,
       ),
     ].toRow(mainAxisAlignment: MainAxisAlignment.spaceBetween);

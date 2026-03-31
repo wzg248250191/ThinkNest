@@ -87,25 +87,25 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     update(kDeviceConfigUpdateIds);
   }
 
-  /// 导出当前设备配置为 CSV 文件
+  /// 导出当前设备配置为 JSON 文件
   ///
   /// 说明：
   /// - Android：写入公共 Downloads/ThinkNest/device_configs/exports（用户更易找到）
   /// - 其他平台：写入应用文档目录 exports 子目录
-  Future<void> exportDeviceConfigsCsv() async {
+  Future<void> exportDeviceConfigsJson() async {
     try {
-      final csv = _deviceConfigsToCsv();
+      final json = _deviceConfigsToJsonString();
       if (Platform.isAndroid) {
-        final String savedPath = await _saveDeviceConfigsCsvToAndroidDownloads(csv);
+        final String savedPath = await _saveDeviceConfigsJsonToAndroidDownloads(json);
         ToastUtils.show('已导出到：$savedPath');
         return;
       }
 
-      final File file = await _writeDeviceConfigsCsvToPrivateExportsDir(csv);
+      final File file = await _writeDeviceConfigsJsonToPrivateExportsDir(json);
       ToastUtils.show('已导出到：${file.path}');
     } catch (e, s) {
       // 关键：导出失败通常是路径/权限/IO 异常，需要记录便于现场排查
-      AppLogService.tryRecordError(e, s, tag: 'device_config_export_csv');
+      AppLogService.tryRecordError(e, s, tag: 'device_config_export_json');
       ToastUtils.show('导出失败');
     }
   }
@@ -177,7 +177,7 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
           .where((d) => !d.isDirectory)
           .where((d) {
             final name = (d.name ?? '').toLowerCase().trim();
-            return name.endsWith('.csv') || name.endsWith('.txt');
+            return name.endsWith('.json');
           })
           .toList(growable: false);
       if (docs.isEmpty) {
@@ -230,7 +230,7 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
       }
 
       final String tempPath =
-          '${Directory.systemTemp.path}${Platform.pathSeparator}${picked.name ?? 'device_configs_export.csv'}';
+          '${Directory.systemTemp.path}${Platform.pathSeparator}${picked.name ?? 'device_configs_export.json'}';
       tempFile = File(tempPath);
       try {
         if (await tempFile.exists()) {
@@ -267,12 +267,12 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     }
   }
 
-  /// 从 CSV 文件导入设备配置
+  /// 从 JSON 文件导入设备配置
   ///
   /// 说明：
-  /// - 通过系统文件选择器选择 .csv/.txt
+  /// - 通过系统文件选择器选择 .json
   /// - 导入会覆盖同名 title 的配置（其余未包含项保持不变）
-  Future<void> importDeviceConfigsCsv() async {
+  Future<void> importDeviceConfigsJson() async {
     final bool ok =
         (await ConfirmDialog.show<bool>(
           title: '导入将覆盖现有设备配置，是否继续？',
@@ -286,34 +286,34 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     try {
       if (Platform.isAndroid) {
         // 关键：Android 11+ 在部分系统（如荣耀）上，传统文件选择器体验不稳定；优先走系统“目录授权 + 列表选择文件”流程。
-        final bool handled = await _tryImportDeviceConfigsCsvFromAndroidDownloads();
+        final bool handled = await _tryImportDeviceConfigsJsonFromAndroidDownloads();
         if (handled) return;
       }
 
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: <String>['csv', 'txt'],
+        allowedExtensions: <String>['json'],
         withData: true,
       );
       if (result == null || result.files.isEmpty) return;
 
       final picked = result.files.single;
-      final String csv = await _readPickedFileAsString(picked);
-      final int updated = await _applyDeviceConfigsFromCsv(csv);
+      final String json = await _readPickedFileAsString(picked);
+      final int updated = await _applyDeviceConfigsFromJsonString(json);
       ToastUtils.show('已导入：$updated 项');
     } catch (e, s) {
-      // 关键：导入失败最常见原因是 CSV 格式不合法或列缺失，记录错误便于定位
-      AppLogService.tryRecordError(e, s, tag: 'device_config_import_csv');
-      ToastUtils.show('导入失败：请检查 CSV 格式');
+      // 关键：导入失败最常见原因是 JSON 结构不合法，记录错误便于定位
+      AppLogService.tryRecordError(e, s, tag: 'device_config_import_json');
+      ToastUtils.show('导入失败：请检查 JSON 格式');
     }
   }
 
-  /// Android：从 Downloads/ThinkNest/device_configs/exports 通过系统目录授权导入 CSV
+  /// Android：从 Downloads/ThinkNest/device_configs/exports 通过系统目录授权导入 JSON
   ///
   /// 返回值：
   /// - true：已处理（包含“用户取消/无文件”等情况）
   /// - false：未处理（回退到 FilePicker 流程）
-  Future<bool> _tryImportDeviceConfigsCsvFromAndroidDownloads() async {
+  Future<bool> _tryImportDeviceConfigsJsonFromAndroidDownloads() async {
     if (!Platform.isAndroid) return false;
 
     File? tempFile;
@@ -332,7 +332,7 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
           .where((d) => !d.isDirectory)
           .where((d) {
             final name = (d.name ?? '').toLowerCase().trim();
-            return name.endsWith('.csv') || name.endsWith('.txt');
+            return name.endsWith('.json');
           })
           .toList(growable: false);
       if (docs.isEmpty) {
@@ -377,7 +377,7 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
       }
 
       final String tempPath =
-          '${Directory.systemTemp.path}${Platform.pathSeparator}${picked.name ?? 'import_device_configs.csv'}';
+          '${Directory.systemTemp.path}${Platform.pathSeparator}${picked.name ?? 'import_device_configs.json'}';
       tempFile = File(tempPath);
       try {
         if (await tempFile.exists()) {
@@ -394,8 +394,8 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
         return true;
       }
 
-      final String csv = await tempFile.readAsString();
-      final int updated = await _applyDeviceConfigsFromCsv(csv);
+      final String json = await tempFile.readAsString();
+      final int updated = await _applyDeviceConfigsFromJsonString(json);
       ToastUtils.show('已导入：$updated 项');
       return true;
     } catch (e, s) {
@@ -412,99 +412,35 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     }
   }
 
-  /// 将当前 `deviceConfigs` 序列化为 CSV 文本
-  String _deviceConfigsToCsv() {
-    const headers = <String>[
-      'title',
-      'enabled',
-      'commandBase',
-      'ip',
-      'port',
-      'openCmd',
-      'closeCmd',
-      'queryCmd',
-    ];
-
-    final buffer = StringBuffer()..writeln(headers.join(','));
+  /// 将当前 `deviceConfigs` 序列化为 JSON 文本
+  String _deviceConfigsToJsonString() {
+    final Map<String, dynamic> json = <String, dynamic>{};
     for (final title in IntegrationController.deviceTitles) {
       final cfg = getDeviceConfig(title);
-      final row = <String>[
-        title,
-        cfg.enabled ? 'true' : 'false',
-        cfg.commandBase.toString(),
-        cfg.ip,
-        cfg.port,
-        cfg.openCmd,
-        cfg.closeCmd,
-        cfg.queryCmd,
-      ].map(_csvEscape).join(',');
-      buffer.writeln(row);
+      json[title] = cfg.toJson();
     }
-    return buffer.toString();
+    return const JsonEncoder.withIndent('  ').convert(json);
   }
 
-  /// 将 CSV 解析并应用到 `deviceConfigs`
+  /// 将 JSON 解析并应用到 `deviceConfigs`
   ///
   /// 返回值：
   /// - 成功更新的设备数量（按 title 计）
-  Future<int> _applyDeviceConfigsFromCsv(String csv) async {
-    final rows = _parseCsv(csv);
-    if (rows.isEmpty) {
-      throw FormatException('empty csv');
+  Future<int> _applyDeviceConfigsFromJsonString(String jsonString) async {
+    final decoded = jsonDecode(jsonString);
+    if (decoded is! Map) {
+      throw FormatException('invalid json root');
     }
-
-    final headerOrFirst = rows.first.map((e) => e.trim()).toList();
-    final bool hasHeader = headerOrFirst.contains('title') || headerOrFirst.contains('ip');
-    final Map<String, int> colIndex = <String, int>{};
-    int startRow = 0;
-    if (hasHeader) {
-      for (int i = 0; i < headerOrFirst.length; i += 1) {
-        final key = headerOrFirst[i];
-        if (key.isEmpty) continue;
-        colIndex[key] = i;
-      }
-      startRow = 1;
-    } else {
-      colIndex
-        ..['title'] = 0
-        ..['enabled'] = 1
-        ..['commandBase'] = 2
-        ..['ip'] = 3
-        ..['port'] = 4
-        ..['openCmd'] = 5
-        ..['closeCmd'] = 6
-        ..['queryCmd'] = 7;
-      startRow = 0;
-    }
-
+    final map = decoded.cast<String, dynamic>();
     int updated = 0;
-    for (int r = startRow; r < rows.length; r += 1) {
-      final row = rows[r];
-      if (row.isEmpty || row.every((e) => e.trim().isEmpty)) continue;
-
-      final title = _cell(row, colIndex['title'])?.trim() ?? '';
-      if (title.isEmpty) continue;
+    for (final entry in map.entries) {
+      final title = entry.key.trim();
       if (!IntegrationController.deviceTitles.contains(title)) {
         continue;
       }
-
-      final enabledStr = _cell(row, colIndex['enabled']) ?? '';
-      final commandBaseStr = _cell(row, colIndex['commandBase']) ?? '';
-
-      // 关键：导入数据可能来自 Excel/记事本，类型与空值都不可靠，必须做容错与归一化
-      final bool enabled = _parseCsvBool(enabledStr, defaultValue: true);
-      final int commandBase = _normalizeCommandBase(commandBaseStr);
-
-      final next = DeviceInfoConfig(
-        enabled: enabled,
-        ip: _cell(row, colIndex['ip']) ?? '',
-        port: _cell(row, colIndex['port']) ?? '',
-        openCmd: _cell(row, colIndex['openCmd']) ?? '',
-        closeCmd: _cell(row, colIndex['closeCmd']) ?? '',
-        queryCmd: _cell(row, colIndex['queryCmd']) ?? '',
-        commandBase: commandBase,
-      );
-
+      final value = entry.value;
+      if (value is! Map) continue;
+      final next = DeviceInfoConfig.fromJson(value.cast<String, dynamic>());
       deviceConfigs[title] = next;
       updated += 1;
     }
@@ -515,25 +451,25 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     return updated;
   }
 
-  /// 将 CSV 文本写入应用私有 exports 目录并返回文件对象
-  Future<File> _writeDeviceConfigsCsvToPrivateExportsDir(String csv) async {
+  /// 将 JSON 文本写入应用私有 exports 目录并返回文件对象
+  Future<File> _writeDeviceConfigsJsonToPrivateExportsDir(String json) async {
     final exportsDir = await _deviceConfigsPrivateExportsDir();
     final ts = DateTime.now();
     final fileName = _deviceConfigsExportFileName(ts);
     final file = File('${exportsDir.path}${Platform.pathSeparator}$fileName');
-    final bytes = _csvUtf8BomBytes(csv);
+    final bytes = utf8.encode(json);
     await file.writeAsBytes(bytes, flush: true);
     return file;
   }
 
-  /// 将 CSV 导出到 Android 公共 Downloads/ThinkNest 下，并返回展示用路径
-  Future<String> _saveDeviceConfigsCsvToAndroidDownloads(String csv) async {
+  /// 将 JSON 导出到 Android 公共 Downloads/ThinkNest 下，并返回展示用路径
+  Future<String> _saveDeviceConfigsJsonToAndroidDownloads(String json) async {
     await _ensureAndroidMediaStoreReady();
     final ts = DateTime.now();
     final fileName = _deviceConfigsExportFileName(ts);
     final tempFile = File('${Directory.systemTemp.path}${Platform.pathSeparator}$fileName');
     try {
-      final bytes = _csvUtf8BomBytes(csv);
+      final bytes = utf8.encode(json);
       await tempFile.writeAsBytes(bytes, flush: true);
 
       final SaveInfo? info = await MediaStore().saveFile(
@@ -582,22 +518,10 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
 
   /// 构造设备配置导出文件名（包含时间戳）
   String _deviceConfigsExportFileName(DateTime ts) {
-    return 'device_configs_${ts.year}${_two(ts.month)}${_two(ts.day)}_${_two(ts.hour)}${_two(ts.minute)}${_two(ts.second)}.csv';
+    return 'device_configs_${ts.year}${_two(ts.month)}${_two(ts.day)}_${_two(ts.hour)}${_two(ts.minute)}${_two(ts.second)}.json';
   }
 
-  /// 将 CSV 文本编码为 UTF-8 BOM 字节数组（提升 Windows Excel 直接打开的中文兼容性）
-  List<int> _csvUtf8BomBytes(String csv) {
-    final normalized = _normalizeCsvLineEndings(csv);
-    const bom = <int>[0xEF, 0xBB, 0xBF];
-    return <int>[...bom, ...utf8.encode(normalized)];
-  }
-
-  /// 统一 CSV 换行符为 CRLF（兼容 Windows Excel 的行识别）
-  String _normalizeCsvLineEndings(String csv) {
-    return csv.replaceAll('\r\n', '\n').replaceAll('\r', '\n').replaceAll('\n', '\r\n');
-  }
-
-  /// 获取/创建设备配置 CSV 私有导出目录
+  /// 获取/创建设备配置 JSON 私有导出目录
   Future<Directory> _deviceConfigsPrivateExportsDir() async {
     final dir = await getApplicationDocumentsDirectory();
     final baseDir =
@@ -698,121 +622,8 @@ mixin _IntegrationDeviceConfigMixin on GetxController {
     return await File(path).readAsString();
   }
 
-  /// CSV 单元格转义：处理逗号/引号/换行，保证导出的 CSV 可被 Excel/记事本正确识别
-  String _csvEscape(String value) {
-    final needsQuote =
-        value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r');
-    if (!needsQuote) return value;
-    final escaped = value.replaceAll('"', '""');
-    return '"$escaped"';
-  }
-
-  /// 读取某行某列的单元格内容（越界返回 null）
-  String? _cell(List<String> row, int? index) {
-    if (index == null) return null;
-    if (index < 0 || index >= row.length) return null;
-    return row[index];
-  }
-
-  /// 解析 CSV 布尔值（支持 true/false/1/0/yes/no/on/off/中文“是/否”）
-  bool _parseCsvBool(String value, {required bool defaultValue}) {
-    final s = value.trim().toLowerCase();
-    if (s.isEmpty) return defaultValue;
-    if (<String>{'1', 'true', 'yes', 'y', 'on', '是', '启用'}.contains(s)) return true;
-    if (<String>{'0', 'false', 'no', 'n', 'off', '否', '禁用'}.contains(s)) return false;
-    return defaultValue;
-  }
-
-  /// 归一化命令进制字段：仅允许 2 或 16，其它值回落到 16
-  int _normalizeCommandBase(dynamic value) {
-    if (value is int) {
-      return value == 2 ? 2 : 16;
-    }
-    if (value is String) {
-      final int? parsed = int.tryParse(value.trim());
-      if (parsed != null) {
-        return parsed == 2 ? 2 : 16;
-      }
-    }
-    return 16;
-  }
-
   /// 将整数补齐为两位字符串（用于文件名时间戳）
   String _two(int v) => v < 10 ? '0$v' : '$v';
-
-  /// 解析 CSV 文本为二维表数据
-  ///
-  /// 说明：
-  /// - 支持双引号包裹字段与双引号转义（""）
-  List<List<String>> _parseCsv(String input) {
-    final rows = <List<String>>[];
-    final currentRow = <String>[];
-    final currentField = StringBuffer();
-    bool inQuotes = false;
-
-    int i = 0;
-    while (i < input.length) {
-      final ch = input[i];
-      if (inQuotes) {
-        if (ch == '"') {
-          final nextIsQuote = (i + 1 < input.length) && input[i + 1] == '"';
-          if (nextIsQuote) {
-            currentField.write('"');
-            i += 2;
-            continue;
-          }
-          inQuotes = false;
-          i += 1;
-          continue;
-        }
-        currentField.write(ch);
-        i += 1;
-        continue;
-      }
-
-      if (ch == '"') {
-        inQuotes = true;
-        i += 1;
-        continue;
-      }
-
-      if (ch == ',') {
-        currentRow.add(currentField.toString());
-        currentField.clear();
-        i += 1;
-        continue;
-      }
-
-      if (ch == '\n') {
-        currentRow.add(currentField.toString());
-        currentField.clear();
-        rows.add(List<String>.from(currentRow));
-        currentRow.clear();
-        i += 1;
-        continue;
-      }
-
-      if (ch == '\r') {
-        // Windows 换行兼容：忽略 \r，统一用 \n 结行
-        i += 1;
-        continue;
-      }
-
-      currentField.write(ch);
-      i += 1;
-    }
-
-    if (inQuotes) {
-      throw FormatException('unclosed quote');
-    }
-
-    if (currentField.isNotEmpty || currentRow.isNotEmpty) {
-      currentRow.add(currentField.toString());
-      rows.add(List<String>.from(currentRow));
-    }
-
-    return rows.where((r) => r.any((c) => c.trim().isNotEmpty)).toList();
-  }
 
   /// 将当前 `deviceConfigs` 序列化并写入本地存储（用于应用下次启动恢复配置）。
   Future<void> _persistDeviceConfigs() async {

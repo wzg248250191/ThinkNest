@@ -89,6 +89,14 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
         return;
       }
 
+      final int mainTurnOffRemaining = _remainingMainTurnOffCooldownSeconds();
+      if (mainTurnOffRemaining > 0) {
+        _optimisticallySetIsOn(type, current.isOn);
+        update(kIntegrationUpdateIds);
+        unawaited(_showMainTurnOffCooldownDialog());
+        return;
+      }
+
       _optimisticallySetIsOn(type, true);
       update(kIntegrationUpdateIds);
 
@@ -106,7 +114,35 @@ mixin _IntegrationSwitchActionsMixin on GetxController, _IntegrationSwitchStateM
       return;
     }
 
+    if (type != IntegrationSwitchType.main && desiredOn) {
+      _clearMainTurnOffCooldown();
+    }
+    if (_isTurningOffLastEnabledOpenedSubSwitch(type, desiredOn, current)) {
+      _markLastEnabledOpenedSubTurnedOff();
+    }
+
     await _toggleSwitch(type, desiredOn);
+  }
+
+  bool _isTurningOffLastEnabledOpenedSubSwitch(
+    IntegrationSwitchType type,
+    bool desiredOn,
+    SwitchCircleState current,
+  ) {
+    if (type == IntegrationSwitchType.main || desiredOn || !current.enabled || !current.isOn) {
+      return false;
+    }
+    int enabledOpenedSubCount = 0;
+    for (final subType in IntegrationSwitchType.values) {
+      if (subType == IntegrationSwitchType.main) {
+        continue;
+      }
+      final SwitchCircleState state = _mustSwitchState(subType);
+      if (state.enabled && state.isOn) {
+        enabledOpenedSubCount++;
+      }
+    }
+    return enabledOpenedSubCount == 1;
   }
 
   /// 仅修改本地状态的 isOn（用于“等待期/编排期”的 UI 乐观展示）

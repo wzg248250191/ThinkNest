@@ -45,12 +45,14 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   bool _isAppInForeground = true;
   int _lastAppPausedMs = 0;
   int _lastForegroundResumedMs = 0;
+  int _lastResumeRecoverTriggeredMs = 0;
 
   static const Duration _foregroundHealthCheckInterval = Duration(seconds: 10);
   static const Duration _foregroundRxStaleThreshold = Duration(seconds: 45);
   static const Duration _resumeForceRecoverThreshold = Duration(seconds: 25);
   static const Duration _recoverThrottle = Duration(seconds: 10);
   static const Duration _foregroundHealthCheckActiveWindow = Duration(seconds: 120);
+  static const Duration _resumeRecoverDebounce = Duration(seconds: 5);
 
   @override
   /// 返回“通过类型复核后的连接状态”，避免底层 Socket 刚连上时 UI 提前显示为成功
@@ -88,12 +90,13 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     if (state == AppLifecycleState.resumed) {
       _isAppInForeground = true;
       _startForegroundHealthCheckTimer();
-      // 关键逻辑：App 冷启动也会收到 resumed；此时应交给启动恢复流程做“有限次尝试”，
-      // 避免在服务器未开启时误触发底层自动重连（导致用户稍后开机时自动连上，看起来像“自己在重连”）。
-      if (_lastAppPausedMs > 0) {
-        // 关键逻辑：健康检查只在“刚从后台回到前台”的短窗口内启用，用于兜底识别“假连接”；
-        // 长时间前台驻留时不应依赖“收包静默”判定，否则服务器无上行消息会导致反复触发重连与刷日志。
-        _lastForegroundResumedMs = DateTime.now().millisecondsSinceEpoch;
+      // 关键逻辑：部分机型息屏/亮屏可能不会稳定触发 paused，仅有 resumed；
+      // 这里统一执行一次唤醒恢复流程，内部再根据连接状态与节流策略决定是否真正发起重连。
+      final int nowMs = DateTime.now().millisecondsSinceEpoch;
+      _lastForegroundResumedMs = nowMs;
+      // 关键逻辑：部分设备解锁过程中会连续触发多次 resumed；这里做短去抖，避免重复唤醒恢复导致日志与连接抖动。
+      if (nowMs - _lastResumeRecoverTriggeredMs >= _resumeRecoverDebounce.inMilliseconds) {
+        _lastResumeRecoverTriggeredMs = nowMs;
         unawaited(_handleAppResumed());
       }
       return;
@@ -131,6 +134,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
         serverType,
         reason: '唤醒恢复',
         forceDisconnect: forceRefresh,
+        udpFallback: true,
       );
     }
 
@@ -156,6 +160,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     ServerType serverType, {
     required String reason,
     required bool forceDisconnect,
+    required bool udpFallback,
   }) async {
     final int nowMs = DateTime.now().millisecondsSinceEpoch;
     final endpoint = _endpoint(serverType);
@@ -171,8 +176,9 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     try {
       final bool ok = await ensureConnected(
         serverType,
-        // 关键逻辑：健康检查/唤醒恢复属于“轻量恢复”，不做 UDP 扫描兜底，避免后台广播与耗电。
-        udpFallback: false,
+        // 关键逻辑：唤醒恢复允许 UDP 兜底，解决“长时间息屏后历史链路失效但重开 App 可连上”的问题；
+        // 健康检查仍可按调用方传入 false，避免频繁广播。
+        udpFallback: udpFallback,
         // 关键逻辑：优先尝试 reconnect（更快），失败再对历史 IP 做有限次直连。
         preferReconnect: true,
         lastEndpointAttempts: 2,
@@ -235,6 +241,7 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
       serverType,
       reason: '健康检查',
       forceDisconnect: true,
+      udpFallback: false,
     );
   }
 

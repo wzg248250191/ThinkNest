@@ -303,73 +303,20 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
     });
   }
 
-  /// 获取本机当前可用的 IPv4 /24 网段前缀（例如 192.168.101）
-  Future<List<String>> _localIpv4CClassPrefixes() async {
-    try {
-      final prefixes = <String>{};
-      final interfaces = await NetworkInterface.list(
-        includeLoopback: false,
-        type: InternetAddressType.IPv4,
-      );
-      for (final itf in interfaces) {
-        for (final addr in itf.addresses) {
-          final ip = addr.address;
-          if (!_isPrivateIpv4(ip)) {
-            continue;
-          }
-          final parts = ip.split('.');
-          if (parts.length != 4) {
-            continue;
-          }
-          prefixes.add('${parts[0]}.${parts[1]}.${parts[2]}');
-        }
-      }
-      return prefixes.toList(growable: false);
-    } catch (_) {
-      return const <String>[];
-    }
+  /// 获取本机当前可用的 IPv4 局域网网段信息（IP/掩码/网络地址）
+  Future<List<LanIpv4Network>> _localIpv4Networks() async {
+    return LanIpv4Utils.localNetworks();
   }
 
-  /// 判断某个 IPv4 是否属于私有网段（RFC1918）
-  bool _isPrivateIpv4(String ip) {
-    final parts = ip.split('.');
-    if (parts.length != 4) {
-      return false;
-    }
-    final a = int.tryParse(parts[0]);
-    final b = int.tryParse(parts[1]);
-    if (a == null || b == null) {
-      return false;
-    }
-    if (a == 10) {
-      return true;
-    }
-    if (a == 192 && b == 168) {
-      return true;
-    }
-    if (a == 172 && b >= 16 && b <= 31) {
-      return true;
-    }
-    return false;
-  }
-
-  /// 判断目标服务器 IP 是否与本机处于同一局域网（按 IPv4 前三段 /24 判断）
+  /// 判断目标服务器 IP 是否与本机处于同一局域网
   Future<bool> _isServerInSameLan(String host) async {
-    if (!_isPrivateIpv4(host)) {
+    final List<LanIpv4Network> localNetworks = await _localIpv4Networks();
+    if (localNetworks.isEmpty) {
+      // 关键逻辑：没有本机网段信息时无法做“掩码位运算”准确判定，按安全策略拒绝连接。
       return false;
     }
-    final parts = host.split('.');
-    if (parts.length != 4) {
-      return false;
-    }
-    final String prefix = '${parts[0]}.${parts[1]}.${parts[2]}';
-    final localPrefixes = await _localIpv4CClassPrefixes();
-    if (localPrefixes.isEmpty) {
-      // 关键逻辑：若无法获取本机网段（偶发权限/系统状态异常），不应直接拒绝连接；此时放行交由连接结果判定。
-      return true;
-    }
-    // 关键逻辑：统一以“本机当前连接网络的前三段前缀”判断同一局域网，避免跨场地误连旧缓存 IP。
-    return localPrefixes.contains(prefix);
+    // 关键逻辑：通过“(目标IP & 本机掩码) == 本机网络地址”做真实同网段判断，兼容 /23、/24 等掩码。
+    return LanIpv4Utils.isInSameLan(host, localNetworks);
   }
 
   @override
@@ -426,10 +373,9 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
   }) async {
     if (!await _isServerInSameLan(host)) {
       // 关键逻辑：只允许连接“当前本机所在网段”内的服务器，避免跨网段误连旧场地设备。
-      DebugUtils.log(
-        '拒绝连接：目标服务器不在同一局域网内，host=$host, localPrefixes=${await _localIpv4CClassPrefixes()}',
-        name: 'socket',
-      );
+      final List<LanIpv4Network> localNetworks = await _localIpv4Networks();
+      final String networksDesc = LanIpv4Utils.formatNetworksForLog(localNetworks);
+      DebugUtils.log('拒绝连接：目标服务器不在同一局域网内，host=$host, localNetworks=[$networksDesc]', name: 'socket');
       return false;
     }
     final success =
@@ -764,10 +710,15 @@ mixin SocketServiceConnectionMixin on SocketServiceBase, SocketServiceSendMixin 
       if (_ensureConnectSessions[serverType]?.id != sessionId || (_ensureConnectSessions[serverType]?.cancelled ?? false)) {
         return false;
       }
-      final bool sameLan = await _isServerInSameLan(endpoint.ip);
-      if (!sameLan) {
-        // 关键逻辑：历史缓存 IP 不在当前局域网时跳过直连，避免跨场地误连旧设备。
-        DebugUtils.log('跳过历史IP直连：不在同一局域网，serverType=$serverType, ip=${endpoint.ip}', name: 'socket');
+      final bool allowConnect = await _isServerInSameLan(endpoint.ip);
+      if (!allowConnect) {
+        final List<LanIpv4Network> localNetworks = await _localIpv4Networks();
+        final String networksDesc = LanIpv4Utils.formatNetworksForLog(localNetworks);
+        // 关键逻辑：这里的失败原因包括“目标不在同网段”或“本机网段信息暂不可用”，输出本机网段详情便于现场快速定位。
+        DebugUtils.log(
+          '跳过历史IP直连：不在同一局域网或本机网段不可用，serverType=$serverType, ip=${endpoint.ip}, localNetworks=[$networksDesc]',
+          name: 'socket',
+        );
         if (!udpFallback) {
           return false;
         }

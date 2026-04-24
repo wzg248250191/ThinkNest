@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import '../../index.dart';
+import 'lan_ipv4_utils.dart';
 
 part 'socket_service_connection_mixin.dart';
 part 'socket_service_send_mixin.dart';

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../../index.dart';
+import 'lan_ipv4_utils.dart';
 
 /// UDP发现服务
 /// 用于自动发现局域网内的PC服务器
@@ -12,8 +13,8 @@ class UdpDiscoveryService {
   /// 发现的服务器列表
   final List<DiscoveredServer> _discoveredServers = [];
 
-  /// 本机当前可用的 IPv4 /24 网段前缀缓存（例如 192.168.101）
-  List<String> _localIpv4Prefixes = const <String>[];
+  /// 本机当前可用的 IPv4 网段缓存（IP/掩码/网络地址）
+  List<LanIpv4Network> _localIpv4Networks = const <LanIpv4Network>[];
   
   /// 扫描完成通知（用于提前结束扫描）
   Completer<void>? _discoveryDoneCompleter;
@@ -65,7 +66,7 @@ class UdpDiscoveryService {
       _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       _socket!.broadcastEnabled = true;
       _discoveryDoneCompleter = Completer<void>();
-      _localIpv4Prefixes = await _computeLocalIpv4CClassPrefixes();
+      _localIpv4Networks = await _computeLocalIpv4Networks();
       
       // 监听响应
       _socket!.listen(
@@ -148,13 +149,13 @@ class UdpDiscoveryService {
 
   /// 发送到常见网段
   void _sendToCommonSubnets(List<int> data) {
-    // 关键逻辑：只向“本机当前所在局域网网段”发送，避免跨场地扫描到其它网段服务器。
-    final prefixes = _localIpv4CClassPrefixes();
-    for (final prefix in prefixes) {
+    // 关键逻辑：按“本机真实子网掩码”计算广播地址，避免固定 /24 广播导致 /23 等网络发现不全。
+    final networks = _localIpv4NetworksOfCurrentDevice();
+    for (final network in networks) {
       try {
         _socket?.send(
           data,
-          InternetAddress('$prefix.255'),
+          InternetAddress(network.broadcast),
           udpEchoPort,
         );
       } catch (_) {
@@ -163,77 +164,25 @@ class UdpDiscoveryService {
     }
   }
 
-  /// 获取本机当前可用的 IPv4 /24 网段前缀（例如 192.168.101）
-  List<String> _localIpv4CClassPrefixes() {
-    return _localIpv4Prefixes;
+  /// 获取本机当前可用的 IPv4 网段信息
+  List<LanIpv4Network> _localIpv4NetworksOfCurrentDevice() {
+    return _localIpv4Networks;
   }
 
-  /// 计算本机当前可用的 IPv4 /24 网段前缀（例如 192.168.101）
-  Future<List<String>> _computeLocalIpv4CClassPrefixes() async {
-    try {
-      final prefixes = <String>{};
-      final interfaces = await NetworkInterface.list(
-        includeLoopback: false,
-        type: InternetAddressType.IPv4,
-      );
-      for (final itf in interfaces) {
-        for (final addr in itf.addresses) {
-          final ip = addr.address;
-          if (!_isPrivateIpv4(ip)) {
-            continue;
-          }
-          final parts = ip.split('.');
-          if (parts.length != 4) {
-            continue;
-          }
-          prefixes.add('${parts[0]}.${parts[1]}.${parts[2]}');
-        }
-      }
-      return prefixes.toList(growable: false);
-    } catch (_) {
-      return const <String>[];
-    }
+  /// 计算本机当前可用的 IPv4 网段信息（IP/掩码/网络地址）
+  Future<List<LanIpv4Network>> _computeLocalIpv4Networks() async {
+    return LanIpv4Utils.localNetworks();
   }
 
-  /// 判断某个 IPv4 是否属于私有网段（RFC1918）
-  bool _isPrivateIpv4(String ip) {
-    final parts = ip.split('.');
-    if (parts.length != 4) {
-      return false;
-    }
-    final a = int.tryParse(parts[0]);
-    final b = int.tryParse(parts[1]);
-    if (a == null || b == null) {
-      return false;
-    }
-    if (a == 10) {
-      return true;
-    }
-    if (a == 192 && b == 168) {
-      return true;
-    }
-    if (a == 172 && b >= 16 && b <= 31) {
-      return true;
-    }
-    return false;
-  }
-
-  /// 判断某个服务器 IP 是否与本机处于同一局域网（按 IPv4 前三段 /24 判断）
+  /// 判断某个服务器 IP 是否与本机处于同一局域网
   bool _isServerInSameLan(String serverIp) {
-    if (!_isPrivateIpv4(serverIp)) {
+    final localNetworks = _localIpv4NetworksOfCurrentDevice();
+    if (localNetworks.isEmpty) {
+      // 关键逻辑：没有本机网段信息时无法做准确同网段判定，按安全策略过滤该响应。
       return false;
     }
-    if (_localIpv4Prefixes.isEmpty) {
-      // 关键逻辑：若本机网段获取失败，不应过滤响应；否则会导致 UDP 发现永远为空。
-      return true;
-    }
-    final parts = serverIp.split('.');
-    if (parts.length != 4) {
-      return false;
-    }
-    // 关键逻辑：以“本机当前连接网络的前三段前缀”判断同一局域网，避免跨场地误发现。
-    final prefix = '${parts[0]}.${parts[1]}.${parts[2]}';
-    return _localIpv4Prefixes.contains(prefix);
+    // 关键逻辑：通过“(服务器IP & 本机掩码) == 本机网络地址”判断同局域网，兼容 /23、/24 等掩码。
+    return LanIpv4Utils.isInSameLan(serverIp, localNetworks);
   }
 
   /// 处理接收到的数据
@@ -254,7 +203,7 @@ class UdpDiscoveryService {
       if (message.mSGtype == MSGTYPE.HeartEcho) {
         final serverIp = datagram.address.address;
         if (!_isServerInSameLan(serverIp)) {
-          // 关键逻辑：过滤非本机所在局域网的响应，避免跨网段发现到其它场地服务器。
+          // 关键逻辑：发现阶段只保留“按真实掩码判定为同网段”的服务器，避免跨局域网误发现。
           return;
         }
 
